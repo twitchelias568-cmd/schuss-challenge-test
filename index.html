@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#080808">
+  <meta name="theme-color" content="#7ab030">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,30 +25,33 @@
   <!-- Chart.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <!-- Experience-Erweiterungen -->
-  <script src="haptics.js"></script>
-  <script src="sounds.js"></script>
-  <script src="tutorial.js"></script>
-  <script src="image-compare-brain.js?v=4.1"></script>
-  <script src="gemini-ai.js" defer></script>
-  <script src="image-compare.js?v=4.1" defer></script>
-  <script src="training_studio/train-browser.js" defer></script>
+  <script src="haptics.js?v=3.0"></script>
+  <script src="sounds.js?v=3.0"></script>
+  <script src="tutorial.js?v=3.0"></script>
+  <script src="image-compare-brain.js?v=3.0"></script>
+  <script src="gemini-ai.js?v=3.0" defer></script>
+  <script src="image-compare.js?v=3.0" defer></script>
 
   <!-- NEUE FEATURES: Physics Engine, Adaptive Bot-KI und erweiterte OCR -->
-  <script src="feature-fallback.js" defer></script>
+  <script src="feature-fallback.js?v=3.0" defer></script>
   <!-- physics-engine.js — aktuell nicht aktiv genutzt -->
   <!-- <script src="physics-engine.js"></script> -->
-  <script src="adaptive-bot.js" defer></script>
-  <script src="contextual-ocr.js" defer></script>
-  <script src="multi-score-detection.js" defer></script>
+  <script src="adaptive-bot.js?v=3.0" defer></script>
+  <script src="contextual-ocr.js?v=3.0" defer></script>
+  <script src="multi-score-detection.js?v=3.0" defer></script>
 
   <!-- ERWEITERTE FEATURES: Achievements, Analytics, Training, Mobile -->
-  <script src="daily-challenge.js" defer></script>
-  <script src="enhanced-achievements.js" defer></script>
-  <script src="enhanced-analytics.js" defer></script>
-  <script src="training-modes.js" defer></script>
-  <script src="mobile-features.js" defer></script>
-  <link rel="stylesheet" href="styles.css">
-  <script src="storage-manager.js"></script>
+  <script src="daily-challenge.js?v=3.0" defer></script>
+  <script src="streak-tracker.js?v=3.0" defer></script>
+  <script src="enhanced-achievements.js?v=3.0" defer></script>
+  <script src="enhanced-analytics.js?v=3.0" defer></script>
+  <script src="training-modes.js?v=3.0" defer></script>
+  <script src="mobile-features.js?v=3.0" defer></script>
+  <link rel="stylesheet" href="styles.css?v=3.0">
+  <link rel="stylesheet" href="modern-animations.css?v=1.0">
+  <script src="modern-ux.js?v=1.0" defer></script>
+  <script src="reward-system.js?v=1.0" defer></script>
+  <script src="storage-manager.js?v=3.0"></script>
   <script src="performance-config.js"></script>
   <script src="battle-balance.js" defer></script>
   <script src="qa-test-suite.js" defer></script>
@@ -117,12 +120,11 @@
     </div>
   </div>
 
-  </div>
   <div id="muzzleFlash"></div>
 
   <!-- ══════════════════════════ SETUP ══════════════════════════ -->
-  <div id="screenSetup" class="screen active sc-setup-premium">
-    <div class="hdr sc-setup-premium__hdr-hide">
+  <div id="screenSetup" class="screen active">
+    <div class="hdr">
       <!-- Top row: profil left · logo center · spacer right -->
       <div class="hdr-top">
         <!-- <div id="hdrStreakMount"></div> -->
@@ -133,244 +135,151 @@
       <div class="logo-tag" id="logoTag" style="display:none;">Du vs. Bot · 40 Schuss · Wer trifft besser?</div>
     </div> <!-- close hdr -->
 
-    <div class="sc-blob sc-blob--left" aria-hidden="true"></div>
-    <div class="sc-blob sc-blob--right" aria-hidden="true"></div>
+    <!-- ════ PREMIUM DASHBOARD (PIXEL-PERFECT REBUILD) ════ -->
 
-    <div id="premiumDashboard" class="sc-premium-dash">
+    <!-- PREMIUM GLOW BACKGROUNDS -->
+    <div
+      style="position:fixed;top:-10%;left:-20%;width:70vw;height:70vw;background:radial-gradient(circle, rgba(0,195,255,0.15) 0%, transparent 70%);border-radius:50%;filter:blur(60px);z-index:0;pointer-events:none;">
+    </div>
+    <div
+      style="position:fixed;bottom:10%;right:-20%;width:80vw;height:80vw;background:radial-gradient(circle, rgba(122,176,48,0.1) 0%, transparent 70%);border-radius:50%;filter:blur(60px);z-index:0;pointer-events:none;">
+    </div>
 
-      <header class="sc-dash-header sc-reveal" style="--sc-reveal-i:0">
-        <div class="sc-brand" aria-hidden="false">
-          <svg class="sc-brand__shield" viewBox="0 0 48 56" width="40" height="46" aria-hidden="true">
-            <defs>
-              <linearGradient id="scShieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#00c8ff" />
-                <stop offset="100%" stop-color="#7fff00" />
-              </linearGradient>
-            </defs>
-            <path fill="url(#scShieldGrad)" opacity="0.95"
-              d="M24 4 L42 12 V28 C42 40 34 50 24 54 C14 50 6 40 6 28 V12 Z" />
-            <circle cx="24" cy="30" r="10" fill="none" stroke="#080808" stroke-width="1.8" />
-            <line x1="24" y1="22" x2="24" y2="38" stroke="#080808" stroke-width="1.5" />
-            <line x1="16" y1="30" x2="32" y2="30" stroke="#080808" stroke-width="1.5" />
-          </svg>
-          <div class="sc-brand__text">
-            <span class="sc-brand__line sc-brand__line--green">Schuss</span>
-            <span class="sc-brand__line sc-brand__line--cyan">Challenge</span>
-          </div>
+    <div id="premiumDashboard"
+      style="width:100%;max-width:500px;margin:0 auto;padding:18px;position:relative;z-index:10;font-family:'Outfit',sans-serif;">
+
+      <!-- ══ GREETING ROW ══ -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;">
+        <div>
+          <h2 id="pdGreeting" style="font-size:1.35rem;margin:0 0 3px 0;font-weight:700;color:#fff;">Guten Tag, <span
+              style="color:#7ab030;" id="pdUserName">Alex</span>!</h2>
+          <div id="pdDate" style="font-size:0.78rem;color:rgba(255,255,255,0.4);">11. Apr. 2026</div>
         </div>
-        <div class="sc-header-actions">
-          <button type="button" class="sc-bell" aria-label="Benachrichtigungen">
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <path fill="currentColor"
-                d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2z" />
-            </svg>
-            <span class="sc-bell__dot"></span>
-          </button>
-          <div id="pdProfileBtn" class="sc-avatar-btn" role="button" tabindex="0"
-            onclick="if(window.toggleProfileMenu) window.toggleProfileMenu(); else console.error('toggleProfileMenu missing');"
-            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
-            <span id="pdProfileInitial">A</span>
-          </div>
+        <div id="pdProfileBtn"
+          onclick="if(window.toggleProfileMenu) window.toggleProfileMenu(); else console.error('toggleProfileMenu missing');"
+          style="position:relative; z-index:9999; cursor:pointer; width:44px;height:44px;border-radius:50%;background:rgba(0,195,255,0.08);border:1.5px solid rgba(0,195,255,0.35);box-shadow:0 0 15px rgba(0,195,255,0.15);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.1rem;cursor:pointer;">
+          <span id="pdProfileInitial">A</span>
         </div>
-      </header>
+      </div>
+  
+        <!-- ══ XP PROGRESS BAR ══ -->
+        <div id="pdXPBarContainer" style="margin-bottom:20px;"></div>
 
-      <section class="sc-greeting sc-reveal" style="--sc-reveal-i:1">
-        <h2 id="pdGreeting" class="sc-greeting__title">Guten Tag, <span id="pdUserName"
-            class="sc-text-lime">Schütze</span>!</h2>
-        <p id="pdDate" class="sc-greeting__date"></p>
-      </section>
-
-      <div id="pdXPBarContainer" class="sc-reveal sc-xp-mount" style="--sc-reveal-i:2"></div>
-
-      <div id="pdOverviewHeader" class="sc-section-label sc-reveal" style="--sc-reveal-i:3">
-        <div class="sc-section-label__title">Deine Übersicht</div>
-        <div class="sc-section-label__sub">Letzte Duelle &amp; Statistiken</div>
+      <!-- ══ STREAK BANNER ══ -->
+      <div id="streakBanner" style="margin-bottom:16px;"></div>
+      <div id="streakProgressBar" style="height:4px;background:rgba(255,255,255,0.08);border-radius:4px;margin-bottom:16px;overflow:hidden;">
+        <div style="height:100%;width:0%;background:linear-gradient(90deg,#ff6b35,#ff9500);border-radius:4px;transition:width 0.5s ease;font-size:0.5rem;color:#fff;text-align:center;line-height:4px;"></div>
       </div>
 
-      <article class="sc-glass-card sc-daily-card sc-reveal" style="--sc-reveal-i:4">
-        <div class="sc-daily-card__head">
-          <h3 class="sc-daily-card__title">Tages-Challenge Dashboard</h3>
-          <p class="sc-daily-card__sub">Tagesziel: <span class="sc-text-cyan" id="pdDailyGoalPts">250</span> Punkte</p>
-        </div>
+      <!-- ══ ÜBERSICHT TITEL ══ -->
+      <div id="pdOverviewHeader" style="margin-bottom:14px;">
+        <div style="font-size:1.1rem;font-weight:600;color:#fff;line-height:1.3;">Deine Übersicht</div>
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);">Letzte Duelle & Statistiken</div>
+      </div>
 
-        <div id="pdMainStatsRow" class="sc-daily-card__body">
-          <div class="sc-daily-left">
-            <div class="sc-challenge-name" id="pdChallengeTitle">Schnellfeuer-Spezialist</div>
-            <p class="sc-progress-line">Fortschritt: <span class="sc-text-cyan" id="pdChallengeProgCur">0</span><span
-                id="pdChallengeProgGoal">/250</span> Pkt.</p>
-            <div class="sc-last3-label">Letzte 3 Duelle</div>
-            <div id="pdLast3Duels" class="sc-last3"></div>
-            <div class="sc-side-stats sc-side-stats--inline">
-              <div class="sc-side-pill">
-                <div class="sc-side-pill__lbl">Siege</div>
-                <div id="pdStatWins" class="sc-side-pill__val sc-text-lime">0</div>
-              </div>
-              <div class="sc-side-pill">
-                <div class="sc-side-pill__lbl">Siegquote</div>
-                <div id="pdStatWinrate" class="sc-side-pill__val">–</div>
-              </div>
-              <div class="sc-side-pill">
-                <div class="sc-side-pill__lbl">Gesamt-XP</div>
-                <div id="pdStatScore" class="sc-side-pill__val sc-text-xp">0</div>
-              </div>
+      <!-- ══ HAUPTKARTE (2-SPALTEN) ══ -->
+      <div id="pdMainStatsRow" style="display:flex;gap:12px;margin-bottom:20px;">
+
+        <!-- LINKS: Letzte 3 Duelle -->
+        <div
+          style="flex:1.6;background:linear-gradient(145deg, rgba(50,55,60,0.4) 0%, rgba(15,18,20,0.8) 100%);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.08);border-top:1px solid rgba(255,255,255,0.15);border-radius:18px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.05);">
+          <div
+            style="font-size:0.72rem;color:rgba(255,255,255,0.45);margin-bottom:8px;font-weight:600;letter-spacing:0.05em;">
+            LETZTE 3 DUELLE</div>
+
+          <div id="pdLast3Duels" style="display:flex;flex-direction:column;gap:8px;">
+            <div
+              style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid #7ab030;">
+              <div><span style="color:#fff;font-weight:500;font-size:0.8rem;">LG 40</span> <span
+                  style="font-size:0.65rem;color:rgba(255,255,255,0.35);">Mittel</span></div>
+              <div style="font-size:0.75rem;font-weight:600;color:#7ab030;">✓ Sieg</div>
+            </div>
+            <div
+              style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid #f06050;">
+              <div><span style="color:#fff;font-weight:500;font-size:0.8rem;">KK 60</span> <span
+                  style="font-size:0.65rem;color:rgba(255,255,255,0.35);">Elite</span></div>
+              <div style="font-size:0.75rem;font-weight:600;color:#f06050;">✗ Niederlage</div>
+            </div>
+            <div
+              style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid #7ab030;">
+              <div><span style="color:#fff;font-weight:500;font-size:0.8rem;">LG 40</span> <span
+                  style="font-size:0.65rem;color:rgba(255,255,255,0.35);">Einfach</span></div>
+              <div style="font-size:0.75rem;font-weight:600;color:#7ab030;">✓ Sieg</div>
             </div>
           </div>
 
-          <div class="sc-gauge-block">
-            <svg class="sc-gauge-svg" viewBox="0 0 200 118" aria-hidden="true">
-              <defs>
-                <linearGradient id="scGaugeGradPremium" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#00c8ff" />
-                  <stop offset="100%" stop-color="#7fff00" />
-                </linearGradient>
-              </defs>
-              <path class="sc-gauge-bg" d="M 28 96 A 72 72 0 0 1 172 96" fill="none"
-                stroke="rgba(255,255,255,0.08)" stroke-width="8" stroke-linecap="round" />
-              <path id="pdGaugeArc" class="sc-gauge-arc" d="M 28 96 A 72 72 0 0 1 172 96" fill="none"
-                stroke="url(#scGaugeGradPremium)" stroke-width="8" stroke-linecap="round" pathLength="100"
-                stroke-dasharray="100" stroke-dashoffset="100" />
-            </svg>
-            <div class="sc-gauge-center">
-              <span id="pdGaugePct" class="sc-gauge-pct sc-text-cyan">0%</span>
-              <span id="pdGaugeSub" class="sc-gauge-sub">0/0 Pkt.</span>
+          <!-- UNTERE STATS REIHE -->
+          <div
+            style="display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;margin-top:12px;">
+            <div style="text-align:center;flex:1;">
+              <div style="font-size:0.6rem;color:rgba(255,255,255,0.4);margin-bottom:3px;">Siege</div>
+              <div id="pdStatWins" style="font-size:0.85rem;font-weight:600;color:#7ab030;">0</div>
             </div>
-          </div>
-
-          <aside class="sc-daily-right" aria-label="Kurzstatistik">
-            <div class="sc-mini-stat">
-              <div class="sc-mini-row">
-                <span class="sc-mini-lbl">Genauigkeit</span>
-                <span class="sc-mini-val" id="pdRightAcc">–</span>
-              </div>
-              <div class="sc-mini-track">
-                <div class="sc-mini-fill" id="pdMiniBarAcc" style="width:0%"></div>
-              </div>
+            <div
+              style="text-align:center;flex:1;border-left:1px solid rgba(255,255,255,0.06);border-right:1px solid rgba(255,255,255,0.06);">
+              <div style="font-size:0.6rem;color:rgba(255,255,255,0.4);margin-bottom:3px;">Siegquote</div>
+              <div id="pdStatWinrate" style="font-size:0.85rem;font-weight:600;color:#fff;">–</div>
             </div>
-            <div class="sc-mini-stat">
-              <div class="sc-mini-row">
-                <span class="sc-mini-lbl">Schüsse heute</span>
-                <span class="sc-mini-val" id="pdRightShots">0</span>
+            <div style="text-align:center;flex:1;">
+              <div style="font-size:0.6rem;color:rgba(255,255,255,0.4);margin-bottom:3px;">Gesamt XP</div>
+              <div id="pdStatScore"
+                style="font-size:0.85rem;font-weight:600;color:#7ab030;text-shadow:0 0 6px rgba(122,176,48,0.3);">0
               </div>
-              <div class="sc-mini-track">
-                <div class="sc-mini-fill" id="pdMiniBarShots" style="width:0%"></div>
-              </div>
-            </div>
-            <div class="sc-mini-stat">
-              <div class="sc-mini-row">
-                <span class="sc-mini-lbl">Serie</span>
-                <span class="sc-mini-val" id="pdSideStreak">🔥 0</span>
-              </div>
-              <div class="sc-mini-track">
-                <div class="sc-mini-fill" id="pdSideStreakBar" style="width:0%;background:linear-gradient(90deg,#00c8ff,#7fff00);border-radius:3px;height:100%;"></div>
-              </div>
-            </div>
-            <div class="sc-mini-stat sc-mini-stat--rank">
-              <div class="sc-mini-row">
-                <span class="sc-mini-lbl">Rang</span>
-              </div>
-              <div id="pdSideRank" class="sc-rank-line">🎯 Anfänger</div>
-              <div class="sc-mini-stat sc-mini-stat--nested">
-                <div class="sc-mini-row">
-                  <span class="sc-mini-lbl">Spiele heute</span>
-                  <span class="sc-mini-val" id="pdSideGamesToday">0</span>
-                </div>
-                <div class="sc-mini-track">
-                  <div id="pdSideGamesTodayBar" class="sc-mini-fill" style="width:0%;background:linear-gradient(90deg,#00c8ff,#7fff00);border-radius:3px;height:100%;"></div>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
-
-        <div class="pd-stats-row sc-daily-bottom-stats">
-          <div>
-            <div class="pd-stat-lbl">Treffer</div>
-            <div class="pd-stat-val" id="pdDashHits">–</div>
-          </div>
-          <div>
-            <div class="pd-stat-lbl">Ø Genauigkeit</div>
-            <div class="pd-stat-val" id="pdDashAccBottom">–</div>
-          </div>
-          <div>
-            <div class="pd-stat-lbl">Score</div>
-            <div class="pd-stat-val" style="color:var(--accent)">0 XP</div>
-          </div>
-        </div>
-      </article>
-
-      <div id="pdQuestsContainer" class="sc-reveal sc-quests-mount" style="--sc-reveal-i:5"></div>
-
-      <section class="sc-badges-section sc-reveal" style="--sc-reveal-i:6">
-        <h4 class="sc-section-heading">Erfolge</h4>
-        <div class="sc-badges-scroll-wrap">
-          <div class="sc-badges-scroll">
-            <div class="pd-badge-card sc-badge-tile highlight-green">
-              <div class="pd-icon sc-badge-ico" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="28" height="28"><circle cx="16" cy="16" r="12" fill="none" stroke="#39ff14" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="#39ff14"/></svg>
-              </div>
-              <div class="pd-badge-name">Volltreffer<br>König</div>
-              <div class="pd-badge-lvl sc-text-lime">Stufe 5</div>
-            </div>
-            <div class="pd-badge-card sc-badge-tile highlight-blue">
-              <div class="pd-icon sc-badge-ico" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="28" height="28"><path fill="#00c8ff" d="M14 22L8 16l2.8-2.8L14 16.4 23.2 7 26 9.8z"/></svg>
-              </div>
-              <div class="pd-badge-name">Perfektes<br>Ergebnis</div>
-              <div class="pd-badge-lvl sc-text-cyan">Meister</div>
-            </div>
-            <div class="pd-badge-card sc-badge-tile opacity-50">
-              <div class="pd-icon sc-badge-ico" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="28" height="28"><path fill="#c0c0c0" d="M8 8h16v4H8zm2 6h12l2 14H8z"/></svg>
-              </div>
-              <div class="pd-badge-name">Wochen<br>Kämpfer</div>
-              <div class="pd-badge-lvl sc-text-muted">Silber</div>
-            </div>
-            <div id="pdBadgeStreak" class="pd-badge-card sc-badge-tile highlight-green">
-              <div class="pd-icon sc-badge-ico" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="28" height="28"><rect x="6" y="8" width="20" height="18" rx="2" fill="none" stroke="#00c8ff" stroke-width="1.8"/><path fill="#00c8ff" d="M10 14l3 3 6-6" stroke="#00c8ff" stroke-width="1.2"/></svg>
-              </div>
-              <div class="pd-badge-name">Tages<br>Serie</div>
-              <div id="pdStreakDays" class="pd-badge-lvl sc-text-lime">0 Tage</div>
             </div>
           </div>
         </div>
-      </section>
 
-      <section class="sc-recent-section sc-reveal" style="--sc-reveal-i:7">
-        <h4 id="pdRecentListHeader" class="sc-section-heading">Letzte Duelle</h4>
-        <div id="pdRecentList" class="pd-recent-list"></div>
-      </section>
+        <!-- RECHTS: Tages-Statistik -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+          <div
+            style="background:linear-gradient(145deg, rgba(45,50,55,0.35) 0%, rgba(10,12,15,0.7) 100%);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06);border-top:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:12px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.08);">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.4);margin-bottom:4px;">Siegesserie</div>
+            <div id="pdSideStreak" style="font-size:1.2rem;font-weight:700;color:#fff;">🔥 0</div>
+            <div style="height:3px;background:rgba(255,255,255,0.08);border-radius:3px;margin-top:6px;overflow:hidden;">
+              <div id="pdSideStreakBar"
+                style="height:100%;width:0%;background:linear-gradient(90deg,#ff6b35,#ff9500);border-radius:3px;"></div>
+            </div>
+          </div>
+          <div
+            style="background:linear-gradient(145deg, rgba(45,50,55,0.35) 0%, rgba(10,12,15,0.7) 100%);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06);border-top:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:12px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.08);">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.4);margin-bottom:4px;">Spiele heute</div>
+            <div id="pdSideGamesToday" style="font-size:1.2rem;font-weight:700;color:#fff;">0</div>
+            <div style="height:3px;background:rgba(255,255,255,0.08);border-radius:3px;margin-top:6px;overflow:hidden;">
+              <div id="pdSideGamesTodayBar"
+                style="height:100%;width:0%;background:linear-gradient(90deg,#00c3ff,#7ab030);border-radius:3px;"></div>
+            </div>
+          </div>
+          <div
+            style="background:linear-gradient(145deg, rgba(45,50,55,0.35) 0%, rgba(10,12,15,0.7) 100%);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06);border-top:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:12px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.08);">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.4);margin-bottom:4px;">Rang</div>
+            <div id="pdSideRank" style="font-size:1rem;font-weight:700;color:#fff;">🎯 Anfänger</div>
+          </div>
+        </div>
+      </div>
 
-      <button type="button" id="btnOpenDuelSetup" class="sc-btn-duel" onclick="openDuelSetup()">
-        <svg class="sc-btn-duel__ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" />
-          <line x1="12" y1="3" x2="12" y2="7" stroke="currentColor" stroke-width="1.5" />
-          <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="1.5" />
-          <line x1="3" y1="12" x2="7" y2="12" stroke="currentColor" stroke-width="1.5" />
-          <line x1="17" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="1.5" />
-          <circle cx="12" cy="12" r="2" fill="currentColor" />
-        </svg>
-        <span>DUELL STARTEN</span>
+      <!-- ══ DAILY MISSIONS ══ -->
+      <div id="pdQuestsContainer" style="margin-bottom:24px;"></div>
+
+      <!-- ══ ACHIEVEMENT BADGES (dynamisch) ══ -->
+      <div style="font-size:1.05rem;font-weight:600;color:#fff;margin-bottom:12px;">Erfolge</div>
+      <div id="pdBadgesGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">
+        <!-- Wird von refreshPremiumDashboard() dynamisch befüllt -->
+      </div>
+
+      <!-- ══ RECENT SESSIONS ══ -->
+      <div id="pdRecentListHeader" style="font-size:1.05rem;font-weight:600;color:#fff;margin-bottom:10px;">Letzte Duelle</div>
+      <div id="pdRecentList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        <div
+          style="background:linear-gradient(145deg, rgba(40,45,50,0.4) 0%, rgba(10,12,15,0.7) 100%);border:1px solid rgba(255,255,255,0.06);border-top:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:14px 16px;text-align:center;color:rgba(255,255,255,0.3);font-size:0.8rem;box-shadow:0 6px 20px rgba(0,0,0,0.4);">
+          Noch keine Duelle gespielt. Starte dein erstes Duell!
+        </div>
+      </div>
+
+      <!-- ══ FLOATING DUELL STARTEN BUTTON ══ -->
+      <button id="btnOpenDuelSetup" onclick="openDuelSetup()"
+        style="position:fixed;bottom:25px;left:50%;transform:translateX(-50%);z-index:8999;background:linear-gradient(135deg,#00c3ff 0%,#7ab030 100%);color:#000;border:none;border-radius:30px;padding:15px 36px;font-weight:800;font-size:1.05rem;box-shadow:0 8px 30px rgba(122,176,48,0.45),0 0 60px rgba(0,195,255,0.15);cursor:pointer;letter-spacing:0.6px;">
+        <span style="font-size:1.2rem;">🎯</span> DUELL STARTEN
       </button>
-
-      <nav class="sc-bottom-nav sc-reveal" style="--sc-reveal-i:8" aria-label="Hauptnavigation">
-        <button type="button" class="sc-nav-item sc-nav-item--active" aria-current="page">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/></svg>
-          <span>Dashboard</span>
-        </button>
-        <button type="button" class="sc-nav-item" onclick="if(typeof toggleProfileMenu==='function'){toggleProfileMenu();if(typeof switchProfileTab==='function')setTimeout(function(){switchProfileTab('history');},200);}">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/></svg>
-          <span>Verlauf</span>
-        </button>
-        <button type="button" class="sc-nav-item" onclick="if(typeof openDuelSetup==='function')openDuelSetup();">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M2 6h20v2H2V6zm0 5h20v2H2v-2zm0 5h14v2H2v-2z"/></svg>
-          <span>Duell</span>
-        </button>
-        <button type="button" class="sc-nav-item" onclick="if(typeof toggleProfileMenu==='function')toggleProfileMenu();">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z"/></svg>
-          <span>Profil</span>
-        </button>
-      </nav>
 
       <!-- ══ BOTTOM SHEET OVERLAY (Duel Setup) ══ -->
       <div id="duelSetupSheetOverlay" onclick="closeDuelSetup(event)"
@@ -389,10 +298,27 @@
         </div>
       </div>
 
-    </div>
-    <div class="sc-setup-spacer" aria-hidden="true"></div>
+      <!-- ══ V2 Scanner View (Dashboard) ══ -->
+      <div id="v2ScannerViewDashboard"
+        style="display:none;position:fixed;top:0;left:0;width:100%;height:100vh;z-index:99999;background:#000;">
+        <video id="v2ScannerVideoDashboard" playsinline autoplay muted
+          style="width:100%;height:100%;object-fit:cover;display:block;"></video>
+        <canvas id="v2ScannerCanvasDashboard"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+        <div style="position:absolute;bottom:40px;left:0;width:100%;text-align:center;">
+          <div
+            style="background:rgba(0,0,0,0.6);display:inline-block;padding:10px 20px;border-radius:30px;font-size:0.9rem;color:#7ab030;font-weight:600;backdrop-filter:blur(8px);border:1px solid rgba(122,176,48,0.3);">
+            Halte den Score in das Bild...
+          </div>
+        </div>
+        <button id="btnStopLiveScanDashboard"
+          style="position:absolute;top:50px;right:20px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:1.2rem;line-height:40px;text-align:center;cursor:pointer;backdrop-filter:blur(4px);">✕</button>
+      </div>
 
-    <!-- Script for Dynamic Greeting --><!-- Script for Dynamic Greeting -->
+    </div>
+    <div style="height:90px;"></div>
+
+    <!-- Script for Dynamic Greeting -->
     <script>
       function updatePDGreeting() {
         if (typeof StorageManager !== 'undefined') {
@@ -414,7 +340,7 @@
         if (pdGreeting) {
           const pdUserName = document.getElementById('pdUserName');
           const name = pdUserName ? pdUserName.innerText : "";
-          pdGreeting.innerHTML = greeting + ', <span id="pdUserName" class="sc-text-lime">' + (name || 'Schütze') + '</span>!';
+          pdGreeting.innerHTML = greeting + ', <span class="pd-name" style="color:#7ab030">' + (name || 'Schütze') + '</span>!';
         }
 
         const pdDate = document.getElementById('pdDate');
@@ -575,6 +501,35 @@
               </div>
             </div>
 
+            <!-- Profil bearbeiten -->
+            <div class="card" style="margin-top:16px;padding:14px;">
+              <div class="card-hd" style="margin-bottom:10px;">✏️ Profil bearbeiten</div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <!-- Name ändern -->
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <span style="font-size:0.8rem;color:rgba(255,255,255,0.6);min-width:60px;">Name:</span>
+                  <input type="text" id="profileNameInput" class="score-inp" style="flex:1;padding:8px 12px;font-size:0.8rem;border-radius:8px;" placeholder="Dein Name..." maxlength="15">
+                  <button class="btn-sec" style="font-size:0.7rem;padding:6px 12px;white-space:nowrap;" onclick="changeProfileName()">Speichern</button>
+                </div>
+                <!-- Avatar Emoji -->
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <span style="font-size:0.8rem;color:rgba(255,255,255,0.6);min-width:60px;">Avatar:</span>
+                  <div id="avatarPicker" style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <span class="avatar-option" data-avatar="🎯" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🎯</span>
+                    <span class="avatar-option" data-avatar="🔫" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🔫</span>
+                    <span class="avatar-option" data-avatar="⭐" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">⭐</span>
+                    <span class="avatar-option" data-avatar="🏆" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🏆</span>
+                    <span class="avatar-option" data-avatar="💫" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">💫</span>
+                    <span class="avatar-option" data-avatar="🔥" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🔥</span>
+                    <span class="avatar-option" data-avatar="🎮" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🎮</span>
+                    <span class="avatar-option" data-avatar="🦅" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🦅</span>
+                    <span class="avatar-option" data-avatar="🐺" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🐺</span>
+                    <span class="avatar-option" data-avatar="🎖️" style="font-size:1.5rem;cursor:pointer;padding:4px 8px;border-radius:8px;border:2px solid transparent;transition:all 0.2s;">🎖️</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Einstellungen -->
             <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
               <button class="btn-sec" id="soundToggleBtn" style="font-size:0.6rem;"
@@ -584,15 +539,92 @@
                 &nbsp;Tutorial</button>
             </div>
 
-            <div class="card" style="margin-top:16px;padding:12px 14px;">
-              <div class="card-hd" style="margin-bottom:8px;">Konto-Sync</div>
-              <div id="accountSyncStatus" style="font-size:.8rem;color:rgba(255,255,255,.72);margin-bottom:10px;">Noch
-                nicht verbunden.</div>
+            <!-- Konto-Sync -->
+            <div class="card" style="margin-top:16px;padding:14px;">
+              <div class="card-hd" style="margin-bottom:10px;">☁️ Konto & Login</div>
+
+              <!-- Angemeldeter User Info (nach Login sichtbar) -->
+              <div id="emailAuthContainer" style="display:none;margin-bottom:14px;">
+                <div style="padding:12px;background:rgba(122,176,48,0.1);border:1px solid rgba(122,176,48,0.2);border-radius:12px;">
+                  <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+                    <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#00c3ff 0%,#7ab030 100%);display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;color:#000;" id="authUserAvatar">A</div>
+                    <div style="flex:1;">
+                      <div style="font-size:0.85rem;font-weight:600;color:#fff;" id="authUserName">–</div>
+                      <div style="font-size:0.7rem;color:rgba(255,255,255,0.5);" id="authUserEmail">–</div>
+                    </div>
+                    <div style="font-size:1.2rem;" title="Angemeldet">✅</div>
+                  </div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button class="btn-sec" style="font-size:0.65rem;flex:1;padding:8px;" onclick="logoutEmail()">🚪 Abmelden</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Login/Register Formular (vor Login sichtbar) -->
+              <div id="authFormContainer" style="margin-bottom:14px;">
+                <!-- Tab Switcher -->
+                <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(255,255,255,0.05);padding:4px;border-radius:10px;">
+                  <button id="authTabLogin" class="auth-tab-btn" style="flex:1;padding:8px;border:none;background:linear-gradient(135deg,#00c3ff 0%,#7ab030 100%);color:#000;font-weight:600;font-size:0.75rem;border-radius:8px;cursor:pointer;" onclick="switchAuthTab('login')">Anmelden</button>
+                  <button id="authTabRegister" class="auth-tab-btn" style="flex:1;padding:8px;border:none;background:transparent;color:rgba(255,255,255,0.5);font-weight:600;font-size:0.75rem;border-radius:8px;cursor:pointer;" onclick="switchAuthTab('register')">Registrieren</button>
+                </div>
+
+                <!-- Auth Message -->
+                <div id="authMessage" style="display:none;padding:8px 10px;border-radius:8px;font-size:0.7rem;margin-bottom:10px;"></div>
+
+                <!-- Login Form -->
+                <div id="authLoginForm" style="display:flex;flex-direction:column;gap:8px;">
+                  <input type="email" id="authLoginEmail" class="score-inp" style="padding:10px 12px;font-size:0.8rem;border-radius:10px;" placeholder="E-Mail Adresse" autocomplete="email">
+                  <input type="password" id="authLoginPassword" class="score-inp" style="padding:10px 12px;font-size:0.8rem;border-radius:10px;" placeholder="Passwort" autocomplete="current-password">
+                  <button class="btn-fire" style="padding:10px;font-size:0.8rem;border-radius:10px;background:linear-gradient(135deg,#00c3ff 0%,#7ab030 100%);color:#000;font-weight:700;border:none;cursor:pointer;" onclick="handleAuthLogin()" id="authLoginBtn">🚀 Anmelden</button>
+                </div>
+
+                <!-- Register Form -->
+                <div id="authRegisterForm" style="display:none;flex-direction:column;gap:8px;">
+                  <input type="email" id="authRegisterEmail" class="score-inp" style="padding:10px 12px;font-size:0.8rem;border-radius:10px;" placeholder="E-Mail Adresse" autocomplete="email">
+                  <input type="password" id="authRegisterPassword" class="score-inp" style="padding:10px 12px;font-size:0.8rem;border-radius:10px;" placeholder="Passwort (mind. 6 Zeichen)" autocomplete="new-password">
+                  <input type="password" id="authRegisterPasswordConfirm" class="score-inp" style="padding:10px 12px;font-size:0.8rem;border-radius:10px;" placeholder="Passwort bestätigen" autocomplete="new-password">
+                  <button class="btn-fire" style="padding:10px;font-size:0.8rem;border-radius:10px;background:linear-gradient(135deg,#00c3ff 0%,#7ab030 100%);color:#000;font-weight:700;border:none;cursor:pointer;" onclick="handleAuthRegister()" id="authRegisterBtn">✨ Konto erstellen</button>
+                </div>
+              </div>
+
+              <!-- Divider -->
+              <div style="display:flex;align-items:center;margin:12px 0;color:rgba(255,255,255,0.3);font-size:0.7rem;">
+                <div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>
+                <div style="padding:0 10px;">oder</div>
+                <div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>
+              </div>
+
+              <!-- Google Login Bereich -->
+              <div id="googleLoginSection" style="margin-bottom:14px;">
+                <div id="googleLoginInfo" style="display:none;margin-bottom:10px;padding:10px;background:rgba(122,176,48,0.1);border:1px solid rgba(122,176,48,0.2);border-radius:10px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <img id="googleAvatar" src="" alt="" style="width:36px;height:36px;border-radius:50%;display:none;">
+                    <div style="flex:1;">
+                      <div style="font-size:0.8rem;font-weight:600;color:#fff;" id="googleUserName">–</div>
+                      <div style="font-size:0.65rem;color:rgba(255,255,255,0.5);" id="googleUserEmail">–</div>
+                    </div>
+                  </div>
+                </div>
+                <button id="googleLoginBtn" class="btn-sec" style="font-size:0.7rem;width:100%;padding:10px;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="signInWithGoogle()">
+                  <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+                  Mit Google anmelden
+                </button>
+                <button id="googleLogoutBtn" class="btn-sec" style="font-size:0.7rem;width:100%;padding:10px;display:none;" onclick="signOutGoogle()">
+                  🚪 Abmelden
+                </button>
+              </div>
+
+              <!-- Sync-Code Bereich -->
+              <div id="accountSyncStatus" style="font-size:.75rem;color:rgba(255,255,255,.72);margin-bottom:12px;line-height:1.4;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <span id="syncStatusIcon" style="font-size:1.2rem;">⏳</span>
+                  <span id="syncStatusText">Verbindung wird hergestellt...</span>
+                </div>
+              </div>
               <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-                <button class="btn-sec" style="font-size:0.6rem;" onclick="showAccountSyncCode()">Sync-Code
-                  erzeugen</button>
-                <button class="btn-sec" style="font-size:0.6rem;" onclick="connectDeviceWithLinkCode()">Gerät
-                  verbinden</button>
+                <button class="btn-sec" style="font-size:0.65rem;" onclick="showAccountSyncCode()">🔗 Sync-Code erzeugen</button>
+                <button class="btn-sec" style="font-size:0.65rem;" onclick="connectDeviceWithLinkCode()">📲 Gerät verbinden</button>
+                <button class="btn-sec" style="font-size:0.65rem;" onclick="forceCloudSync()">🔄 Jetzt synchronisieren</button>
               </div>
             </div>
 
@@ -898,6 +930,22 @@
           </div>
         </div>
       </div>
+
+      <!-- ══ BOT-ZUSTANDS-ANZEIGE ══ -->
+      <div id="botStatusCard" style="display:none;margin-top:12px;background:rgba(20,22,25,0.7);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 14px;transition:all 0.5s ease;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="botStatusIcon" style="font-size:1.5rem;line-height:1;">😐</div>
+          <div style="flex:1;min-width:0;">
+            <div id="botStatusTitle" style="font-size:0.78rem;font-weight:600;color:#fff;line-height:1.2;">Bot ist konzentriert</div>
+            <div id="botStatusDesc" style="font-size:0.62rem;color:rgba(255,255,255,0.45);margin-top:2px;line-height:1.2;">Trifft mit normaler Präzision</div>
+          </div>
+          <div id="botPersonalityBadge" style="font-size:0.6rem;font-weight:700;padding:3px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);color:#fff;white-space:nowrap;letter-spacing:0.3px;text-transform:uppercase;">Anfänger</div>
+        </div>
+        <div style="margin-top:6px;height:3px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+          <div id="botFocusBar" style="height:100%;width:50%;background:linear-gradient(90deg,#7ab030,#a0d84a);border-radius:3px;transition:width 0.8s ease;"></div>
+        </div>
+        <div style="font-size:0.55rem;color:rgba(255,255,255,0.3);margin-top:3px;text-align:right;">Focus: <span id="botFocusPct">50</span>%</div>
+      </div>
     </div>
 
     <div class="actions">
@@ -1032,38 +1080,85 @@
   </div>
 
   <!-- ══════════════════════════ LEADERBOARD ══════════════════════════ -->
-  <!-- FEEDBACK -->
-  <!-- FEEDBACK SCREEN -->
+  <!-- FEEDBACK SCREEN (v2 – Duel Result + Emoji + Tags + Comment) -->
   <div id="screenFeedback" class="screen">
-    <div class="hdr">
-      <div class="logo" style="font-size:1.7rem;letter-spacing:.14em;">DEIN <em>FEEDBACK</em></div>
-      <div class="logo-tag">Hilf uns, Schussduell besser zu machen</div>
-      <div class="hdr-tag" id="feedbackCount">◆ DUELL ◆</div>
+    <div class="hdr" style="padding:28px 20px 8px;">
+      <div style="text-align:center;">
+        <div class="logo" style="font-size:1.4rem;letter-spacing:.15em;">SCHUSS<em>DUELL</em></div>
+      </div>
     </div>
 
-    <div class="content fb-content"
-      style="display: flex; align-items: center; justify-content: center; flex: 1; width: 100%;">
-      <div class="fb-card">
-        <div class="fb-title">Wie gefällt dir die Seite?</div>
-        <div class="fb-sub">Bitte wähle ein Emoji:</div>
-
-        <div class="fb-emoji-row">
-          <button class="fb-emoji-btn" onclick="submitSiteFeedback(1)" title="Schlecht">😡</button>
-          <button class="fb-emoji-btn" onclick="submitSiteFeedback(2)" title="Naja">🙁</button>
-          <button class="fb-emoji-btn" onclick="submitSiteFeedback(3)" title="Okay">😐</button>
-          <button class="fb-emoji-btn" onclick="submitSiteFeedback(4)" title="Gut">🙂</button>
-          <button class="fb-emoji-btn" onclick="submitSiteFeedback(5)" title="Super!">🤩</button>
-        </div>
-
-        <div class="fb-scale-row">
-          <span>schlecht</span>
-          <span>top</span>
+    <!-- Duel Result Card -->
+    <div style="margin:14px 16px 0;background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);border-radius:14px;padding:16px 18px;">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:.15em;color:rgba(122,176,48,.6);text-transform:uppercase;margin-bottom:10px;">DUELL ERGEBNIS</div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div id="fbResultIcon" style="width:46px;height:46px;border-radius:12px;background:rgba(15,35,10,.8);border:1.5px solid rgba(57,255,20,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
+        <div style="flex:1;">
+          <div id="fbResultTitle" style="color:#fff;font-size:.95rem;font-weight:800;letter-spacing:.02em;"></div>
+          <div id="fbResultScore" style="color:rgba(122,176,48,.5);font-size:.75rem;margin-top:3px;"></div>
         </div>
       </div>
     </div>
 
-    <div class="actions">
-      <button class="btn-sec" onclick="skipSiteFeedback()">Vielleicht später</button>
+    <!-- Emoji Rating -->
+    <div style="padding:22px 20px 0;">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:.15em;color:rgba(122,176,48,.6);text-transform:uppercase;margin-bottom:14px;">DEINE BEWERTUNG</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;" id="fbEmojiRow">
+        <div class="fb-emoji-item" data-idx="0" onclick="fbSetRating(0)">
+          <div class="fb-emoji-btn" style="width:52px;height:52px;background:rgba(30,45,20,.6);border:1.5px solid rgba(122,176,48,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">😤</div>
+          <span style="color:rgba(90,140,60,.5);font-size:.6rem;font-weight:600;">Schlecht</span>
+        </div>
+        <div class="fb-emoji-item" data-idx="1" onclick="fbSetRating(1)">
+          <div class="fb-emoji-btn" style="width:52px;height:52px;background:rgba(30,45,20,.6);border:1.5px solid rgba(122,176,48,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">😐</div>
+          <span style="color:rgba(90,140,60,.5);font-size:.6rem;font-weight:600;">Okay</span>
+        </div>
+        <div class="fb-emoji-item" data-idx="2" onclick="fbSetRating(2)">
+          <div class="fb-emoji-btn" style="width:52px;height:52px;background:rgba(30,45,20,.6);border:1.5px solid rgba(122,176,48,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">😄</div>
+          <span style="color:rgba(90,140,60,.5);font-size:.6rem;font-weight:600;">Gut</span>
+        </div>
+        <div class="fb-emoji-item" data-idx="3" onclick="fbSetRating(3)">
+          <div class="fb-emoji-btn" style="width:52px;height:52px;background:rgba(30,45,20,.6);border:1.5px solid rgba(122,176,48,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">🤩</div>
+          <span style="color:rgba(90,140,60,.5);font-size:.6rem;font-weight:600;">Super</span>
+        </div>
+        <div class="fb-emoji-item" data-idx="4" onclick="fbSetRating(4)">
+          <div class="fb-emoji-btn" style="width:52px;height:52px;background:rgba(30,45,20,.6);border:1.5px solid rgba(122,176,48,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;">🔥</div>
+          <span style="color:rgba(90,140,60,.5);font-size:.6rem;font-weight:600;">Episch</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Tags -->
+    <div style="padding:20px 20px 0;">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:.15em;color:rgba(122,176,48,.6);text-transform:uppercase;margin-bottom:12px;">WAS HAT DIR GEFALLEN?</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;" id="fbTags">
+        <span class="fb-tag" data-tag="Challenges" onclick="fbToggleTag(this)" style="background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);color:rgba(122,176,48,.5);font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;">Challenges</span>
+        <span class="fb-tag" data-tag="Animationen" onclick="fbToggleTag(this)" style="background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);color:rgba(122,176,48,.5);font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;">Animationen</span>
+        <span class="fb-tag" data-tag="Balancing" onclick="fbToggleTag(this)" style="background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);color:rgba(122,176,48,.5);font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;">Balancing</span>
+        <span class="fb-tag" data-tag="Statistiken" onclick="fbToggleTag(this)" style="background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);color:rgba(122,176,48,.5);font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;">Statistiken</span>
+        <span class="fb-tag" data-tag="UI-Design" onclick="fbToggleTag(this)" style="background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);color:rgba(122,176,48,.5);font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;">UI-Design</span>
+      </div>
+    </div>
+
+    <!-- Comment -->
+    <div style="padding:20px 20px 0;">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:.15em;color:rgba(122,176,48,.6);text-transform:uppercase;margin-bottom:12px;">DEIN KOMMENTAR</div>
+      <div style="background:rgba(30,45,20,.6);border:1.5px solid rgba(122,176,48,.2);border-radius:14px;padding:14px 16px;">
+        <textarea id="fbComment" placeholder="Was können wir besser machen? Bugs, Ideen, Lob..." style="background:transparent;border:none;outline:none;color:rgba(255,255,255,.75);font-size:.8rem;line-height:1.7;min-height:90px;resize:none;width:100%;font-family:var(--font-main);" maxlength="300" rows="3" oninput="fbUpdateCounter()"></textarea>
+        <div style="margin-top:8px;display:flex;justify-content:flex-end;">
+          <span id="fbCounter" style="color:rgba(60,100,40,.4);font-size:.65rem;font-weight:600;">0 / 300</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div style="padding:24px 20px 0;">
+      <button id="fbSubmitBtn" onclick="fbSubmit()" style="width:100%;background:linear-gradient(135deg,#00c3ff 0%,#7ab030 100%);border:none;border-radius:14px;padding:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;opacity:.35;pointer-events:none;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="#0c1008" stroke-width="2.5" stroke-linecap="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="#0c1008" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span style="color:#0c1008;font-size:1.1rem;font-weight:900;letter-spacing:.2em;text-transform:uppercase;">FEEDBACK ABSENDEN</span>
+      </button>
+      <div style="text-align:center;margin-top:14px;">
+        <span style="color:rgba(60,100,40,.4);font-size:.75rem;font-weight:600;cursor:pointer;letter-spacing:.05em;" onclick="skipSiteFeedback()">Überspringen</span>
+      </div>
     </div>
   </div>
 
@@ -1135,7 +1230,7 @@
   </div>
 
   <!-- ══════════════════════════ SCRIPT ══════════════════════════ -->
-  <script src="app.js" defer></script>
+  <script src="app.js?v=3.0" defer></script>
 
 
   <!-- 📷 FOTO-ANALYSE OVERLAY (Initially Hidden) -->
@@ -1164,12 +1259,12 @@
         </div>
 
         <!-- Live Scanner View (Hidden by default) -->
-        <div id="v2ScannerView"
+        <div id="v2ScannerViewOverlay"
           style="display:none;position:relative;width:100%;border-radius:14px;overflow:hidden;background:#000;margin-bottom:15px;box-shadow:0 10px 30px rgba(0,0,0,0.5);">
           <!-- Video Stream -->
-          <video id="v2ScannerVideo" playsinline autoplay muted style="width:100%;height:auto;display:block;"></video>
+          <video id="v2ScannerVideoOverlay" playsinline autoplay muted style="width:100%;height:auto;display:block;"></video>
           <!-- Canvas Overlay for YOLO Bounding Boxes -->
-          <canvas id="v2ScannerCanvas"
+          <canvas id="v2ScannerCanvasOverlay"
             style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
 
           <div style="position:absolute;bottom:10px;left:0;width:100%;text-align:center;">
@@ -1178,7 +1273,7 @@
               Halte den Score in das Bild...
             </div>
           </div>
-          <button id="btnStopLiveScan"
+          <button id="btnStopLiveScanOverlay"
             style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:1rem;line-height:32px;text-align:center;cursor:pointer;">✕</button>
         </div>
 

@@ -3,7 +3,7 @@
 // Firebase-Requests werden NICHT gecacht (immer live).
 
 // Dynamische Versionskonstante für Cache-Name
-const CACHE_VERSION = 'v2.6';
+const CACHE_VERSION = 'v3.0' // Hard Reset: Alle alten Caches werden gelöscht
 const CACHE_NAME = `schussduell-${CACHE_VERSION}`;
 
 const PRECACHE = [
@@ -12,7 +12,6 @@ const PRECACHE = [
   // Alle lokalen JS-Dateien
   './app.js',
   './adaptive-bot.js',
-  './physics-engine.js',
   './daily-challenge.js',
   './enhanced-achievements.js',
   './feature-fallback.js',
@@ -69,7 +68,39 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Cache-first for local assets, network-first for everything else
+  // Skip non-GET requests (POST, PUT, DELETE, etc.) - don't cache API calls
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Skip API requests to external domains (Worker API)
+  if (event.request.url.includes('workers.dev') || event.request.url.includes('/api/')) {
+    return;
+  }
+
+  // Network-first for HTML (index.html) - always check for updates!
+  if (event.request.mode === 'navigate' || url.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Cache successful HTML responses
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Offline fallback: use cached HTML
+          return caches.match(event.request).then(cached => {
+            return cached || caches.match('./index.html');
+          });
+        })
+    );
+    return;
+  }
+
+  // Cache-first for all other assets (JS, CSS, images, fonts)
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;

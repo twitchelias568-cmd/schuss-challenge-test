@@ -220,6 +220,23 @@ const G = {
   transitionLabel: '',   // Label für aktuelle Übergangsphase
 };
 
+// Shot Log Auto-Scroll mit Debounce (verhindert Race Conditions bei schnellen Schüssen)
+let _shotLogScrollPending = false;
+function autoScrollShotLog() {
+  if (_shotLogScrollPending) return;
+  _shotLogScrollPending = true;
+  requestAnimationFrame(() => {
+    if (DOM.shotLogWrap) {
+      // Smooth scroll für besseres UX
+      DOM.shotLogWrap.scrollTo({
+        top: DOM.shotLogWrap.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+    setTimeout(() => { _shotLogScrollPending = false; }, 100);
+  });
+}
+
 /* ─── DISZIPLIN CONFIG ───────────────────── */
 const DISC = {
   // Luftgewehr
@@ -649,11 +666,27 @@ function toggleProfileMenu() {
   if (isActive) {
     ov.classList.remove('active');
     if (icon) icon.classList.remove('active');
+    document.body.style.overflow = '';
+    // iOS Safari fallback: scroll position wiederherstellen
+    if (window.innerWidth <= 768 && document.body.style.position === 'fixed') {
+      const scrollY = Math.abs(parseInt(document.body.style.top, 10) || 0);
+      document.body.style.position = '';
+      document.body.style.top = '';
+      window.scrollTo(0, scrollY);
+    }
   } else {
     refreshDebugToolsVisibility();
     refreshProfileSheet();
     ov.classList.add('active');
     if (icon) icon.classList.add('active');
+    // Body scroll lock
+    document.body.style.overflow = 'hidden';
+    // iOS Safari fallback: position fixed + scroll position speichern
+    if (window.innerWidth <= 768) {
+      const scrollY = window.scrollY || window.pageYOffset;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+    }
     // Chart + Sound-Button erst nach Paint initialisieren
     requestAnimationFrame(() => requestAnimationFrame(() => {
       renderPerformanceChart();
@@ -691,14 +724,22 @@ function refreshProfileSheet() {
   const xpNeeded = nextRank ? (nextRank.min - rank.min) : 1;
   const pct = nextRank ? Math.min(100, (xpInRank / xpNeeded) * 100) : 100;
 
+  // Gespeicherten Avatar laden
+  const savedAvatar = StorageManager.getRaw('profileAvatar') || '🎯';
+
   // Hero
   const el = id => document.getElementById(id);
-  if (el('psAvatarIcon')) el('psAvatarIcon').textContent = rank.icon;
+  if (el('psAvatarIcon')) el('psAvatarIcon').textContent = savedAvatar;
   if (el('psRankIcon')) el('psRankIcon').textContent = rank.icon;
   if (el('psRankName')) el('psRankName').textContent = rank.name;
   if (el('psLevel')) el('psLevel').textContent = idx + 1;
   if (el('psTotalXP')) el('psTotalXP').textContent = G.xp;
   if (el('psUsername')) el('psUsername').textContent = G.username || 'Schütze';
+
+  // Avatar-Picker vorausfüllen
+  const nameInput = el('profileNameInput');
+  if (nameInput) nameInput.value = G.username || '';
+  initAvatarPicker(savedAvatar);
 
   // XP bar
   if (el('psXpCur')) el('psXpCur').textContent = xpInRank;
@@ -762,6 +803,796 @@ function refreshProfileSheet() {
         `;
   }
 }
+
+/* ─── BOT-ZUSTANDS-ANZEIGE IM BATTLE ─────────── */
+let _botStatusUpdateInterval = null;
+
+function updateBotStatusCard() {
+  const card = document.getElementById('botStatusCard');
+  if (!card) return;
+
+  // Prüfen ob AdaptiveBotSystem verfügbar ist
+  if (typeof AdaptiveBotSystem === 'undefined' || typeof AdaptiveBotSystem.getBotFullStatus !== 'function') {
+    card.style.display = 'none';
+    return;
+  }
+
+  const fullStatus = AdaptiveBotSystem.getBotFullStatus();
+  if (!fullStatus) {
+    card.style.display = 'none';
+    return;
+  }
+
+  // Karte anzeigen
+  card.style.display = 'block';
+
+  const { personality, mood, stressLevel, fatigue, focus, stateSuffix, stateIcon, progressionText, isImproving, isDegrading } = fullStatus;
+
+  // Elemente aktualisieren
+  const iconEl = document.getElementById('botStatusIcon');
+  const titleEl = document.getElementById('botStatusTitle');
+  const descEl = document.getElementById('botStatusDesc');
+  const focusBar = document.getElementById('botFocusBar');
+  const focusPct = document.getElementById('botFocusPct');
+  const badgeEl = document.getElementById('botPersonalityBadge');
+
+  // Haupt-Icon: Persönlichkeits-Icon + Zustands-Icon
+  const mainIcon = stateIcon || personality.icon;
+  if (iconEl) iconEl.textContent = mainIcon;
+
+  // Titel: Persönlichkeit + optionaler Zustand
+  if (titleEl) {
+    titleEl.textContent = personality.name + (stateSuffix ? ` ${stateSuffix}` : '');
+    titleEl.style.color = personality.levelColor;
+  }
+
+  // Beschreibung: Fehlermuster oder Fortschrittstext
+  if (descEl) {
+    if (progressionText) {
+      descEl.textContent = progressionText;
+    } else {
+      descEl.textContent = personality.errorPattern;
+    }
+    descEl.style.color = 'rgba(255,255,255,0.45)';
+  }
+
+  // Persönlichkeits-Badge (Level-Anzeige)
+  if (badgeEl) {
+    badgeEl.textContent = personality.levelText;
+    badgeEl.style.color = personality.levelColor;
+    badgeEl.style.borderColor = personality.levelColor + '66';
+    badgeEl.style.background = personality.levelGlow;
+  }
+
+  // Focus-Balken
+  if (focusBar) {
+    focusBar.style.width = focus + '%';
+    focusBar.style.background = `linear-gradient(90deg, ${personality.levelColor}, ${personality.levelColor}88)`;
+  }
+  if (focusPct) focusPct.textContent = Math.round(focus);
+
+  // Card-Border-Animation für besondere Zustände
+  const isExtreme = mood === 'in_the_zone' || mood === 'stressed';
+  card.style.borderColor = isExtreme ? personality.levelColor + '44' : 'rgba(255,255,255,0.06)';
+  card.style.boxShadow = isExtreme ? `0 0 15px ${personality.levelGlow}, inset 0 0 10px ${personality.levelGlow}` : 'none';
+
+  // Pulsierender Effekt für extreme Zustände
+  if (isExtreme) {
+    card.style.animation = 'botStatusPulse 2s ease-in-out infinite';
+  } else {
+    card.style.animation = 'none';
+  }
+}
+
+// Pulsierende Animation per CSS (einmalig injizieren)
+(function injectBotStatusCSS() {
+  if (document.getElementById('botStatusCSS')) return;
+  const style = document.createElement('style');
+  style.id = 'botStatusCSS';
+  style.textContent = `
+    @keyframes botStatusPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+// Bot-Status während des Duells regelmäßig aktualisieren
+function startBotStatusUpdates() {
+  if (_botStatusUpdateInterval) clearInterval(_botStatusUpdateInterval);
+  updateBotStatusCard(); // Sofort initial anzeigen
+  _botStatusUpdateInterval = setInterval(updateBotStatusCard, 2000); // Alle 2s aktualisieren
+}
+
+function stopBotStatusUpdates() {
+  if (_botStatusUpdateInterval) {
+    clearInterval(_botStatusUpdateInterval);
+    _botStatusUpdateInterval = null;
+  }
+  const card = document.getElementById('botStatusCard');
+  if (card) card.style.display = 'none';
+}
+window.signInWithGoogle = async function() {
+  if (!fbReady || !fbAuth) {
+    alert('Firebase Auth ist noch nicht bereit. Bitte warte einen Moment.');
+    return;
+  }
+
+  const btn = document.getElementById('googleLoginBtn');
+  if (btn) {
+    btn.textContent = '⏳ Anmeldung läuft...';
+    btn.disabled = true;
+  }
+
+  try {
+    // Prüfen ob bereits ein Google-Nutzer angemeldet ist
+    const currentUser = fbAuth.currentUser;
+    if (currentUser && currentUser.providerData.some(p => p.providerId === 'google.com')) {
+      alert('Du bist bereits mit Google angemeldet.');
+      updateGoogleLoginUI(currentUser);
+      return;
+    }
+
+    // GoogleAuthProvider erstellen
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    let result;
+    // Auf Mobile besser: signInWithPopup, auf Desktop auch
+    try {
+      result = await fbAuth.signInWithPopup(provider);
+    } catch (popupError) {
+      // Fallback: Redirect für Mobile/WebView
+      console.warn('Popup failed, trying redirect:', popupError);
+      await fbAuth.signInWithRedirect(provider);
+      return; // Redirect passiert, Seite wird neu geladen
+    }
+
+    const user = result.user;
+    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+
+    // Falls vorher anonym → Daten migrieren
+    const wasAnonymous = currentUser && currentUser.isAnonymous;
+    if (wasAnonymous) {
+      // Anonymen Account mit Google verknüpfen
+      try {
+        await currentUser.linkWithCredential(credential);
+        console.log('✅ Anonymen Account mit Google verknüpft');
+      } catch (linkError) {
+        // Wenn Verknüpfung fehlschlägt (z.B. Google existiert bereits)
+        if (linkError.code === 'auth/credential-already-in-use') {
+          // Bestehenden Google-Account nehmen und Daten übertragen
+          console.warn('Google Account existiert bereits, wechsle dazu');
+          await fbAuth.signInWithCredential(credential);
+        } else {
+          console.error('Account link error:', linkError);
+        }
+      }
+    }
+
+    // Username vom Google-Profil übernehmen falls noch nicht gesetzt
+    const displayName = user.displayName;
+    if (displayName && (!G.username || G.username === 'Schütze')) {
+      G.username = displayName.substring(0, 15);
+      StorageManager.setRaw('username', G.username);
+    }
+
+    // Google-Profil-Bild als Avatar speichern falls vorhanden
+    if (user.photoURL) {
+      StorageManager.setRaw('googlePhotoURL', user.photoURL);
+    }
+
+    updateGoogleLoginUI(user);
+    updateAccountSyncStatus();
+
+    // Daten zu Firebase syncen
+    pushProfileToFirebase();
+
+    // Erfolg-Feedback
+    if (btn) {
+      btn.textContent = '✅ Angemeldet!';
+      setTimeout(() => {
+        btn.style.display = 'none';
+        document.getElementById('googleLogoutBtn').style.display = 'block';
+      }, 1500);
+    }
+
+    alert(`✅ Willkommen, ${displayName || G.username}!\n\nDein Konto ist jetzt mit Google verknüpft.\nDeine bisherigen Daten wurden übernommen.`);
+
+  } catch (error) {
+    console.error('Google Sign-In Error:', error);
+    const errorMsg = error.code === 'auth/popup-closed-by-user'
+      ? 'Anmeldung abgebrochen.'
+      : error.code === 'auth/popup-blocked'
+        ? 'Pop-up wurde blockiert. Bitte erlaube Pop-ups für diese Seite.'
+        : `Anmeldung fehlgeschlagen: ${error.message}`;
+    alert(errorMsg);
+
+    if (btn) {
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+        Mit Google anmelden`;
+      btn.disabled = false;
+    }
+  }
+};
+
+window.signOutGoogle = async function() {
+  if (!confirm('Möchtest du dich wirklich von Google abmelden?\n\nDeine Daten bleiben erhalten, aber der Sync läuft nur noch über den Sync-Code.')) {
+    return;
+  }
+
+  try {
+    await fbAuth.signOut();
+    fbUser = null;
+
+    // UI zurücksetzen
+    document.getElementById('googleLoginBtn').style.display = 'flex';
+    document.getElementById('googleLogoutBtn').style.display = 'none';
+    document.getElementById('googleLoginInfo').style.display = 'none';
+
+    // Zurück zu anonym
+    const user = await ensureFirebaseAnonymousAuth();
+    fbUser = user;
+    updateAccountSyncStatus();
+
+    alert('✅ Von Google abgemeldet. Anonymer Modus aktiv.');
+  } catch (error) {
+    console.error('Sign-Out Error:', error);
+    alert('Abmeldung fehlgeschlagen: ' + error.message);
+  }
+};
+
+/* ═══════════════════════════════════════════════
+   EMAIL/PASSWORT AUTHENTIFIZIERUNG
+   ═══════════════════════════════════════════════ */
+
+window.registerWithEmail = async function(email, password) {
+  if (!fbReady || !fbAuth) {
+    throw new Error('Firebase Auth ist noch nicht bereit.');
+  }
+
+  if (!email || !password) {
+    throw new Error('Bitte E-Mail und Passwort ausfüllen.');
+  }
+
+  if (password.length < 6) {
+    throw new Error('Passwort muss mindestens 6 Zeichen haben.');
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new Error('Bitte eine gültige E-Mail-Adresse eingeben.');
+  }
+
+  try {
+    const userCredential = await fbAuth.createUserWithEmailAndPassword(email, password);
+    const user = userCredential.user;
+
+    // Display Name setzen (aus vorhandenem Username oder E-Mail)
+    const displayName = G.username || email.split('@')[0];
+    if (displayName) {
+      await user.updateProfile({ displayName: displayName.substring(0, 15) });
+    }
+
+    // Bestehende lokale Daten mit neuem Konto verknüpfen
+    await linkLocalDataToFirebase(user);
+
+    console.log('✅ Neues Konto erstellt:', user.email);
+    return user;
+  } catch (error) {
+    console.error('Registration Error:', error);
+    let message = 'Registrierung fehlgeschlagen.';
+    
+    switch (error.code) {
+      case 'auth/email-already-in-use':
+        message = 'Diese E-Mail-Adresse ist bereits registriert. Bitte melde dich stattdessen an.';
+        break;
+      case 'auth/invalid-email':
+        message = 'Die E-Mail-Adresse ist ungültig.';
+        break;
+      case 'auth/weak-password':
+        message = 'Das Passwort ist zu schwach (mind. 6 Zeichen).';
+        break;
+      case 'auth/network-request-failed':
+        message = 'Netzwerkfehler. Bitte überprüfe deine Internetverbindung.';
+        break;
+      default:
+        message = error.message;
+    }
+    
+    throw new Error(message);
+  }
+};
+
+window.signInWithEmail = async function(email, password) {
+  if (!fbReady || !fbAuth) {
+    throw new Error('Firebase Auth ist noch nicht bereit.');
+  }
+
+  if (!email || !password) {
+    throw new Error('Bitte E-Mail und Passwort ausfüllen.');
+  }
+
+  try {
+    const userCredential = await fbAuth.signInWithEmailAndPassword(email, password);
+    const user = userCredential.user;
+
+    // Username vom Firebase-Profil übernehmen falls noch nicht gesetzt
+    if (user.displayName && (!G.username || G.username === 'Schütze')) {
+      G.username = user.displayName.substring(0, 15);
+      StorageManager.setRaw('username', G.username);
+    }
+
+    // Bestehende lokale Daten mit Konto verknüpfen
+    await linkLocalDataToFirebase(user);
+
+    console.log('✅ Angemeldet:', user.email);
+    return user;
+  } catch (error) {
+    console.error('Login Error:', error);
+    let message = 'Anmeldung fehlgeschlagen.';
+    
+    switch (error.code) {
+      case 'auth/user-not-found':
+        message = 'Kein Konto mit dieser E-Mail-Adresse gefunden. Bitte registriere dich zuerst.';
+        break;
+      case 'auth/wrong-password':
+        message = 'Falsches Passwort. Bitte überprüfe deine Eingabe.';
+        break;
+      case 'auth/invalid-email':
+        message = 'Die E-Mail-Adresse ist ungültig.';
+        break;
+      case 'auth/too-many-requests':
+        message = 'Zu viele fehlgeschlagene Anmeldeversuche. Bitte versuche es später erneut.';
+        break;
+      case 'auth/network-request-failed':
+        message = 'Netzwerkfehler. Bitte überprüfe deine Internetverbindung.';
+        break;
+      default:
+        message = error.message;
+    }
+    
+    throw new Error(message);
+  }
+};
+
+window.logoutEmail = async function() {
+  if (!fbAuth) {
+    throw new Error('Firebase Auth ist nicht verfügbar.');
+  }
+
+  if (!confirm('Möchtest du dich wirklich abmelden?\n\nDeine Daten bleiben erhalten und werden beim nächsten Anmelden synchronisiert.')) {
+    return;
+  }
+
+  try {
+    // Lokale Daten vor dem Logout speichern
+    const localData = {
+      username: G.username,
+      xp: G.xp,
+      streak: G.streak,
+      weapon: G.weapon,
+      discipline: G.discipline
+    };
+    StorageManager.setRaw('pre_logout_data', JSON.stringify(localData));
+
+    await fbAuth.signOut();
+    fbUser = null;
+    fbAccountId = '';
+
+    // UI zurücksetzen
+    updateAuthUI(null);
+
+    // Zurück zu anonymous auth
+    const user = await ensureFirebaseAnonymousAuth();
+    fbUser = user;
+    updateAccountSyncStatus();
+    updateXPCorner();
+    updateProfileMenu();
+
+    console.log('✅ Abgemeldet');
+    return true;
+  } catch (error) {
+    console.error('Logout Error:', error);
+    throw new Error('Abmeldung fehlgeschlagen: ' + error.message);
+  }
+};
+
+// Lokale Daten mit Firebase-Konto verknüpfen
+async function linkLocalDataToFirebase(user) {
+  if (!user || !fbDb) return;
+
+  try {
+    // Account-ID auflösen
+    await resolveFirebaseAccountId(user);
+
+    // Cloud-User bootstrappen
+    await bootstrapCloudUser(user, { force: false });
+
+    // Bestehende lokale Daten zu Firebase syncen
+    await pushProfileToFirebase();
+
+    // UI aktualisieren
+    fbUser = user;
+    updateAuthUI(user);
+    updateAccountSyncStatus();
+    updateSchuetzenpass();
+
+    // Profil-Bild speichern falls vorhanden
+    if (user.photoURL) {
+      StorageManager.setRaw('profilePhotoURL', user.photoURL);
+    }
+
+    console.log('✅ Lokale Daten mit Firebase-Konto verknüpft:', user.email || user.displayName);
+  } catch (error) {
+    console.warn('Data linking warning:', error?.code || error?.message || error);
+    // Nicht kritisch - Login funktioniert trotzdem
+  }
+}
+
+// Zentrale UI-Aktualisierung für Auth-State
+function updateAuthUI(user) {
+  // Google UI
+  updateGoogleLoginUI(user);
+  
+  // Email Auth UI
+  const emailAuthContainer = document.getElementById('emailAuthContainer');
+  const authFormContainer = document.getElementById('authFormContainer');
+  
+  if (emailAuthContainer && authFormContainer) {
+    if (user && !user.isAnonymous) {
+      // User ist angemeldet
+      emailAuthContainer.style.display = 'block';
+      authFormContainer.style.display = 'none';
+      
+      // User Info aktualisieren
+      const initial = (user.displayName || user.email || 'A').charAt(0).toUpperCase();
+      document.getElementById('authUserAvatar').textContent = initial;
+      document.getElementById('authUserName').textContent = user.displayName || 'Nutzer';
+      document.getElementById('authUserEmail').textContent = user.email || '';
+      
+      // Sync-Status aktualisieren
+      const syncStatusText = document.getElementById('syncStatusText');
+      if (syncStatusText) {
+        syncStatusText.innerHTML = `
+          <div style="font-weight:600;margin-bottom:2px;">Angemeldet als ${user.email || user.displayName}</div>
+          <div style="opacity:0.7;">☁️ Cloud-Sync aktiv</div>
+        `;
+      }
+      
+    } else {
+      // User ist nicht angemeldet (anonym)
+      emailAuthContainer.style.display = 'none';
+      authFormContainer.style.display = 'block';
+      
+      const syncStatusText = document.getElementById('syncStatusText');
+      if (syncStatusText) {
+        syncStatusText.innerHTML = 'Lokaler Modus · Melde dich an für Sync';
+      }
+    }
+  }
+
+  // Profil-Icon aktualisieren
+  const profileIcon = document.getElementById('profileIcon');
+  if (profileIcon) {
+    if (user && !user.isAnonymous) {
+      profileIcon.style.visibility = 'visible';
+      profileIcon.style.background = 'linear-gradient(135deg, #00c3ff 0%, #7ab030 100%)';
+      profileIcon.style.color = '#000';
+    } else {
+      profileIcon.style.visibility = 'hidden';
+      profileIcon.style.background = '';
+      profileIcon.style.color = '';
+    }
+  }
+
+  // Dashboard greeting aktualisieren
+  if (typeof updatePDGreeting === 'function') {
+    setTimeout(updatePDGreeting, 200);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   AUTH UI HANDLER (Email/Passwort)
+   ═══════════════════════════════════════════════ */
+
+window.switchAuthTab = function(tab) {
+  const loginTab = document.getElementById('authTabLogin');
+  const registerTab = document.getElementById('authTabRegister');
+  const loginForm = document.getElementById('authLoginForm');
+  const registerForm = document.getElementById('authRegisterForm');
+  
+  if (!loginTab || !registerTab || !loginForm || !registerForm) return;
+  
+  hideAuthMessage();
+  
+  if (tab === 'login') {
+    loginTab.style.background = 'linear-gradient(135deg,#00c3ff 0%,#7ab030 100%)';
+    loginTab.style.color = '#000';
+    registerTab.style.background = 'transparent';
+    registerTab.style.color = 'rgba(255,255,255,0.5)';
+    loginForm.style.display = 'flex';
+    registerForm.style.display = 'none';
+  } else {
+    registerTab.style.background = 'linear-gradient(135deg,#00c3ff 0%,#7ab030 100%)';
+    registerTab.style.color = '#000';
+    loginTab.style.background = 'transparent';
+    loginTab.style.color = 'rgba(255,255,255,0.5)';
+    registerForm.style.display = 'flex';
+    loginForm.style.display = 'none';
+  }
+};
+
+window.showAuthMessage = function(text, type = 'error') {
+  const msg = document.getElementById('authMessage');
+  if (!msg) return;
+  
+  msg.textContent = text;
+  msg.style.display = 'block';
+  
+  if (type === 'error') {
+    msg.style.background = 'rgba(240,96,80,0.15)';
+    msg.style.border = '1px solid rgba(240,96,80,0.3)';
+    msg.style.color = '#f06050';
+  } else {
+    msg.style.background = 'rgba(122,176,48,0.15)';
+    msg.style.border = '1px solid rgba(122,176,48,0.3)';
+    msg.style.color = '#7ab030';
+  }
+};
+
+window.hideAuthMessage = function() {
+  const msg = document.getElementById('authMessage');
+  if (msg) msg.style.display = 'none';
+};
+
+window.setAuthLoading = function(loading, btnId = 'authLoginBtn') {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  
+  if (loading) {
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin 0.6s linear infinite;"></span> Wird verarbeitet...';
+  } else {
+    btn.disabled = false;
+    if (btnId === 'authLoginBtn') {
+      btn.textContent = '🚀 Anmelden';
+    } else {
+      btn.textContent = '✨ Konto erstellen';
+    }
+  }
+};
+
+window.handleAuthLogin = async function() {
+  const email = document.getElementById('authLoginEmail').value.trim();
+  const password = document.getElementById('authLoginPassword').value;
+  
+  hideAuthMessage();
+  
+  if (!email || !password) {
+    return showAuthMessage('❌ Bitte E-Mail und Passwort ausfüllen.');
+  }
+  
+  setAuthLoading(true, 'authLoginBtn');
+  
+  try {
+    const user = await signInWithEmail(email, password);
+    showAuthMessage('✅ Erfolgreich angemeldet!', 'success');
+    
+    // Formular zurücksetzen
+    document.getElementById('authLoginEmail').value = '';
+    document.getElementById('authLoginPassword').value = '';
+    
+    // Erfolg-Feedback
+    setTimeout(() => {
+      hideAuthMessage();
+    }, 2000);
+    
+  } catch (error) {
+    showAuthMessage(error.message);
+  } finally {
+    setAuthLoading(false, 'authLoginBtn');
+  }
+};
+
+window.handleAuthRegister = async function() {
+  const email = document.getElementById('authRegisterEmail').value.trim();
+  const password = document.getElementById('authRegisterPassword').value;
+  const passwordConfirm = document.getElementById('authRegisterPasswordConfirm').value;
+  
+  hideAuthMessage();
+  
+  if (!email || !password || !passwordConfirm) {
+    return showAuthMessage('❌ Bitte alle Felder ausfüllen.');
+  }
+  
+  if (password !== passwordConfirm) {
+    return showAuthMessage('❌ Passwörter stimmen nicht überein.');
+  }
+  
+  if (password.length < 6) {
+    return showAuthMessage('❌ Passwort muss mindestens 6 Zeichen haben.');
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return showAuthMessage('❌ Bitte eine gültige E-Mail-Adresse eingeben.');
+  }
+  
+  setAuthLoading(true, 'authRegisterBtn');
+  
+  try {
+    const user = await registerWithEmail(email, password);
+    showAuthMessage('✅ Konto erstellt! Deine Daten werden synchronisiert.', 'success');
+    
+    // Formular zurücksetzen
+    document.getElementById('authRegisterEmail').value = '';
+    document.getElementById('authRegisterPassword').value = '';
+    document.getElementById('authRegisterPasswordConfirm').value = '';
+    
+    // Erfolg-Feedback
+    setTimeout(() => {
+      hideAuthMessage();
+    }, 2000);
+    
+  } catch (error) {
+    showAuthMessage(error.message);
+  } finally {
+    setAuthLoading(false, 'authRegisterBtn');
+  }
+};
+
+// Enter-Taste Unterstützung für Login-Formular
+function initAuthFormListeners() {
+  const loginPassword = document.getElementById('authLoginPassword');
+  const registerPasswordConfirm = document.getElementById('authRegisterPasswordConfirm');
+  
+  if (loginPassword) {
+    loginPassword.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleAuthLogin();
+    });
+  }
+  
+  if (registerPasswordConfirm) {
+    registerPasswordConfirm.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleAuthRegister();
+    });
+  }
+}
+
+// Spinner Animation CSS
+function injectAuthSpinnerCSS() {
+  if (document.getElementById('auth-spinner-style')) return;
+  
+  const style = document.createElement('style');
+  style.id = 'auth-spinner-style';
+  style.textContent = `
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function updateGoogleLoginUI(user) {
+  const loginBtn = document.getElementById('googleLoginBtn');
+  const logoutBtn = document.getElementById('googleLogoutBtn');
+  const loginInfo = document.getElementById('googleLoginInfo');
+  const userName = document.getElementById('googleUserName');
+  const userEmail = document.getElementById('googleUserEmail');
+  const avatar = document.getElementById('googleAvatar');
+
+  // Wenn kein user oder kein Google Provider
+  const isGoogleUser = user && user.providerData && user.providerData.some(p => p.providerId === 'google.com');
+
+  if (!isGoogleUser) {
+    // Nicht mit Google angemeldet
+    if (loginBtn) loginBtn.style.display = 'flex';
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (loginInfo) loginInfo.style.display = 'none';
+    return;
+  }
+
+  // Mit Google angemeldet
+  if (loginBtn) loginBtn.style.display = 'none';
+  if (logoutBtn) logoutBtn.style.display = 'block';
+  if (loginInfo) loginInfo.style.display = 'block';
+
+  if (userName) userName.textContent = user.displayName || 'Google Nutzer';
+  if (userEmail) userEmail.textContent = user.email || '';
+
+  if (avatar && user.photoURL) {
+    avatar.src = user.photoURL;
+    avatar.style.display = 'block';
+    StorageManager.setRaw('googlePhotoURL', user.photoURL);
+  }
+}
+
+// Auth-State Observer einrichten
+function setupGoogleAuthObserver() {
+  if (!fbAuth) return;
+
+  fbAuth.onAuthStateChanged(user => {
+    if (user) {
+      fbUser = user;
+      updateGoogleLoginUI(user);
+      updateAccountSyncStatus();
+      bootstrapCloudUser(user).catch(console.warn);
+    } else {
+      fbUser = null;
+      updateGoogleLoginUI(null);
+      updateAccountSyncStatus();
+    }
+  });
+}
+
+/* ─── PROFIL BEARBEITEN (Name + Avatar) ─────────── */
+function initAvatarPicker(currentAvatar) {
+  const options = document.querySelectorAll('.avatar-option');
+  options.forEach(opt => {
+    const isActive = opt.dataset.avatar === currentAvatar;
+    opt.style.borderColor = isActive ? '#7ab030' : 'transparent';
+    opt.style.background = isActive ? 'rgba(122,176,48,0.15)' : 'transparent';
+    opt.style.transform = isActive ? 'scale(1.15)' : 'scale(1)';
+
+    opt.onclick = () => {
+      const newAvatar = opt.dataset.avatar;
+      StorageManager.setRaw('profileAvatar', newAvatar);
+
+      // UI aktualisieren
+      const psAvatarIcon = document.getElementById('psAvatarIcon');
+      if (psAvatarIcon) psAvatarIcon.textContent = newAvatar;
+
+      // Avatar-Picker aktualisieren
+      options.forEach(o => {
+        o.style.borderColor = o.dataset.avatar === newAvatar ? '#7ab030' : 'transparent';
+        o.style.background = o.dataset.avatar === newAvatar ? 'rgba(122,176,48,0.15)' : 'transparent';
+        o.style.transform = o.dataset.avatar === newAvatar ? 'scale(1.15)' : 'scale(1)';
+      });
+
+      // Dashboard-Initial aktualisieren
+      const pdProfileInitial = document.getElementById('pdProfileInitial');
+      if (pdProfileInitial) pdProfileInitial.textContent = newAvatar;
+
+      triggerHaptic();
+    };
+  });
+}
+
+window.changeProfileName = function() {
+  const nameInput = document.getElementById('profileNameInput');
+  if (!nameInput) return;
+
+  const newName = nameInput.value.trim().substring(0, 15);
+  if (!newName) {
+    alert('Bitte gib einen Namen ein.');
+    return;
+  }
+
+  const oldName = G.username;
+  G.username = newName;
+  StorageManager.setRaw('username', newName);
+
+  // UI überall aktualisieren
+  const psUsername = document.getElementById('psUsername');
+  if (psUsername) psUsername.textContent = newName;
+
+  const pdUserName = document.getElementById('pdUserName');
+  if (pdUserName) pdUserName.textContent = newName;
+
+  const pdProfileInitial = document.getElementById('pdProfileInitial');
+  if (pdProfileInitial) pdProfileInitial.textContent = newName.charAt(0).toUpperCase();
+
+  // Firebase sync
+  if (fbReady && fbDb) {
+    pushProfileToFirebase();
+  }
+
+  triggerHaptic();
+  alert(`Name von "${oldName}" zu "${newName}" geändert.`);
+};
 
 function spawnConfetti() {
   const colors = ['#ff9600', '#1cb0f6', '#90d838', '#ff4500', '#ffd700', '#ffffff'];
@@ -860,16 +1691,186 @@ function scheduleFeedbackPrompt(totalDuels) {
   }, 800);
 }
 
-function showFeedbackScreen(totalDuels) {
+function showFeedbackScreen(totalDuels, duelData) {
   clearPendingFeedbackPrompt();
   if (DOM.feedbackCount) DOM.feedbackCount.textContent = `◆ DUELL #${totalDuels} ◆`;
+  // If duel data provided, populate the v2 feedback screen
+  if (duelData) {
+    fbSetDuel(duelData);
+  }
   showScreen('screenFeedback');
+}
+
+// ═══════════════════════════════════════════════
+// FEEDBACK v2 – Duel Result + Emoji + Tags + Comment
+// ═══════════════════════════════════════════════
+let fbRating = null;
+let fbTags = [];
+let fbDuelData = null; // { discipline, opponent, result, score }
+
+function fbSetDuel(data) {
+  fbDuelData = data;
+  fbRating = null;
+  fbTags = [];
+  const meta = FB_RESULT_META[data.result] || FB_RESULT_META.draw;
+  // Result icon
+  const iconEl = document.getElementById('fbResultIcon');
+  if (iconEl) iconEl.innerHTML = meta.icon;
+  // Title
+  const titleEl = document.getElementById('fbResultTitle');
+  const name = escHtml(data.opponent || data.discipline);
+  if (titleEl) titleEl.innerHTML = `${name} — <span style="color:${meta.color}">${meta.text}</span>`;
+  // Score
+  const scoreEl = document.getElementById('fbResultScore');
+  if (scoreEl) scoreEl.textContent = data.score || '';
+  // Reset UI
+  fbResetEmojiUI();
+  fbResetTagsUI();
+  document.getElementById('fbComment').value = '';
+  fbUpdateCounter();
+  fbUpdateSubmitBtn();
+}
+
+const FB_RESULT_META = {
+  win: { icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26Z" fill="#39FF14"/></svg>', text: 'Sieg!', color: '#39FF14' },
+  loss: { icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 6L18 18M18 6L6 18" stroke="#FF4444" stroke-width="3" stroke-linecap="round"/></svg>', text: 'Niederlage', color: '#FF4444' },
+  draw: { icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 12H19" stroke="#FFAA00" stroke-width="3" stroke-linecap="round"/></svg>', text: 'Unentschieden', color: '#FFAA00' },
+};
+
+function fbSetRating(idx) {
+  fbRating = idx;
+  fbUpdateEmojiUI();
+  fbUpdateSubmitBtn();
+}
+
+function fbUpdateEmojiUI() {
+  document.querySelectorAll('.fb-emoji-item').forEach(el => {
+    const i = parseInt(el.dataset.idx);
+    const btn = el.querySelector('.fb-emoji-btn');
+    const label = el.querySelector('span');
+    if (i === fbRating) {
+      btn.style.cssText = 'width:58px;height:58px;background:rgba(15,35,10,.8);border:2px solid #39FF14;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;cursor:pointer;transition:all .15s ease;';
+      label.style.color = '#39FF14';
+      label.style.fontWeight = '700';
+    } else {
+      btn.style.cssText = 'width:52px;height:52px;background:rgba(30,45,20,.6);border:1.5px solid rgba(122,176,48,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;';
+      label.style.color = 'rgba(90,140,60,.5)';
+      label.style.fontWeight = '600';
+    }
+  });
+}
+
+function fbResetEmojiUI() {
+  fbRating = null;
+  fbUpdateEmojiUI();
+}
+
+function fbToggleTag(el) {
+  const tag = el.dataset.tag;
+  if (fbTags.includes(tag)) {
+    fbTags = fbTags.filter(t => t !== tag);
+    el.style.cssText = 'background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);color:rgba(122,176,48,.5);font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;';
+  } else {
+    fbTags.push(tag);
+    el.style.cssText = 'background:rgba(15,35,10,.8);border:1px solid rgba(57,255,20,.35);color:#39FF14;font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;';
+  }
+}
+
+function fbResetTagsUI() {
+  fbTags = [];
+  document.querySelectorAll('.fb-tag').forEach(el => {
+    el.style.cssText = 'background:rgba(30,45,20,.6);border:1px solid rgba(122,176,48,.2);color:rgba(122,176,48,.5);font-size:.75rem;font-weight:600;padding:7px 14px;border-radius:20px;cursor:pointer;';
+  });
+}
+
+function fbUpdateCounter() {
+  const comment = document.getElementById('fbComment').value;
+  const counter = document.getElementById('fbCounter');
+  if (counter) counter.textContent = `${comment.length} / 300`;
+}
+
+function fbUpdateSubmitBtn() {
+  const btn = document.getElementById('fbSubmitBtn');
+  if (btn) {
+    if (fbRating !== null) {
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    } else {
+      btn.style.opacity = '.35';
+      btn.style.pointerEvents = 'none';
+    }
+  }
+}
+
+function fbSubmit() {
+  if (fbRating === null) return;
+  const comment = document.getElementById('fbComment').value || '';
+  const score = fbRating + 1; // 1-5 scale
+  const totalDuels = getTotalDuels();
+
+  // Sende vollständiges Feedback an Worker API (für Admin-Dashboard)
+  const safeUsername = sanitizeUsername(G.username || 'Anonym');
+  const userEmail = typeof StorageManager !== 'undefined' ? (StorageManager.getRaw('userEmail') || `${safeUsername}@schuss-challenge.local`) : `${safeUsername}@schuss-challenge.local`;
+  const emojiLabels = ['😤 Schlecht', '😐 Okay', '😄 Gut', '🤩 Super', '🔥 Episch'];
+  const tags = fbTags || [];
+
+  // Duell-Ergebnis zusammenbauen
+  const duelResult = fbDuelData || {};
+  const resultTitle = duelResult.title || `${G.weapon || 'LG'} ${duelResult.result || 'Unbekannt'}`;
+  const resultScore = duelResult.score || duelResult.myScore || 'N/A';
+
+  fetch('https://schuss-challenge.eliaskummel.workers.dev/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: userEmail,
+      feedbackType: score >= 4 ? 'general' : score === 3 ? 'general' : 'bug',
+      title: `${emojiLabels[fbRating] || 'Feedback'} - ${resultTitle}`,
+      message: `⭐ Bewertung: ${score}/5 (${emojiLabels[fbRating] || 'N/A'})\n🏆 Duell: ${resultTitle}\n📊 Score: ${resultScore}\n🏷️ Tags: ${tags.length > 0 ? tags.join(', ') : 'Keine'}\n💬 Kommentar: ${comment || 'Keiner'}\n👤 Spieler: ${safeUsername}\n🔫 Waffe: ${G.weapon || 'N/A'}\n🎯 Disziplin: ${G.discipline || 'N/A'}`
+    })
+  }).catch(err => console.warn('Feedback an Worker fehlgeschlagen:', err));
+
+  // Save to localStorage (compat with existing feedback system)
+  let entries = [];
+  try { entries = JSON.parse(localStorage.getItem('sd_feedback_entries') || '[]'); } catch (e) { entries = []; }
+  if (!Array.isArray(entries)) entries = [];
+  entries.unshift({ score, totalDuels, weapon: G.weapon, discipline: fbDuelData?.discipline || G.discipline, ts: Date.now(), tags: fbTags, comment });
+  while (entries.length > 100) entries.pop();
+  try { localStorage.setItem('sd_feedback_entries', JSON.stringify(entries)); } catch (e) { console.warn('[Feedback] localStorage Fehler:', e.message); }
+
+  console.log('[Feedback]', { rating: fbRating + 1, tags: fbTags, comment, duel: fbDuelData });
+
+  // Thank you animation
+  const card = document.getElementById('screenFeedback');
+  if (card) {
+    // Show brief thank you, then go back
+    if (typeof Sounds !== 'undefined') Sounds.win();
+    setTimeout(() => {
+      scheduleNextFeedback(totalDuels);
+      showScreen('screenSetup');
+    }, 1500);
+  }
 }
 
 function submitSiteFeedback(rating) {
   clearPendingFeedbackPrompt();
   const score = parseInt(rating);
   const totalDuels = getTotalDuels();
+
+  // Sende Feedback an Worker API (für Admin-Dashboard)
+  const safeUsername = sanitizeUsername(G.username || 'Anonym');
+  const userEmail = typeof StorageManager !== 'undefined' ? (StorageManager.getRaw('userEmail') || `${safeUsername}@schuss-challenge.local`) : `${safeUsername}@schuss-challenge.local`;
+  
+  fetch('https://schuss-challenge.eliaskummel.workers.dev/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: userEmail,
+      feedbackType: 'general',
+      title: `⭐ ${score}/5 Sterne - ${G.weapon || 'LG'} ${G.discipline || ''}`,
+      message: `Score: ${score}/5\nWaffe: ${G.weapon || 'unknown'}\nDisziplin: ${G.discipline || 'unknown'}\nSchwierigkeit: ${G.diff || 'unknown'}\nSpieler: ${safeUsername}`
+    })
+  }).catch(err => console.warn('Feedback an Worker fehlgeschlagen:', err));
 
   if (Number.isInteger(score) && score >= 1 && score <= 5) {
     // ... (existing logic for saving)
@@ -886,7 +1887,7 @@ function submitSiteFeedback(rating) {
       ts: Date.now()
     });
     while (entries.length > 100) entries.pop();
-    try { localStorage.setItem('sd_feedback_entries', JSON.stringify(entries)); } catch (e) { }
+    try { localStorage.setItem('sd_feedback_entries', JSON.stringify(entries)); } catch (e) { console.warn('[Feedback] localStorage Fehler:', e.message); }
 
     {
       const safeUsername = sanitizeUsername(G.username || 'Anonym');
@@ -974,7 +1975,7 @@ function readJsonStorage(key, fallback) {
 }
 
 function writeJsonStorage(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { }
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.warn('[Storage] localStorage Fehler:', e.message); }
 }
 
 function showEngagementToast(message, durationMs = 4200) {
@@ -1247,7 +2248,7 @@ const HealthyEngagement = (function () {
           body: 'Deine Rookie-Woche und Tagesmission warten auf dich.',
           tag: 'sd-gentle-reminder'
         });
-      } catch (e) { }
+      } catch (e) { console.warn('[Rookie] Reminder speichern fehlgeschlagen:', e.message); }
     }
     state.lastReminderDateId = today;
     saveState();
@@ -1354,6 +2355,9 @@ function recordGameResult(result, diff, weapon, playerPts, botPts) {
 
   // NEU: Erweiterte Analytics - Spiel-Daten hinzufügen
   if (typeof EnhancedAnalytics !== 'undefined') {
+    // XP berechnen (nur bei Sieg)
+    const earnedXP = (result === 'win' && !G?.dnf) ? (XP_PER_WIN[diff] || 10) : 0;
+
     const gameData = {
       result: result,
       playerScore: playerPts,
@@ -1363,6 +2367,7 @@ function recordGameResult(result, diff, weapon, playerPts, botPts) {
       disciplineName: DISC[G.discipline]?.name || G.discipline,
       weapon: weapon,
       difficulty: diff,
+      xpEarned: earnedXP, // NEU: XP speichern
       shots: G.playerShots || [], // Spieler-Schüsse falls verfügbar
       shotsLeft: G.playerShotsLeft,
       maxDeficit: Math.max(0, botPts - playerPts), // Größter Rückstand
@@ -1379,6 +2384,14 @@ function recordGameResult(result, diff, weapon, playerPts, botPts) {
         gamesPlayed: (gs.wins || 0) + (gs.losses || 0) + (gs.draws || 0)
       };
       DailyChallenge.trackGame(gameData, stats);
+    }
+
+    // StreakTracker: 1 Duell = +1 Streak (Mo-Fr ab 12:00)
+    if (typeof StreakTracker !== 'undefined') {
+      const streakResult = StreakTracker.recordGame();
+      if (streakResult.streakIncreased && streakResult.milestone) {
+        console.log('[Streak] Milestone erreicht:', streakResult.milestone);
+      }
     }
 
     // NEU: Adaptive Bot - Spieler-Schwächen analysieren
@@ -1475,7 +2488,7 @@ function addHistoryEntry(result, diff, weapon, playerPts, botPts) {
     StorageManager.set('history', hist);
     scheduleCloudSync('history_changed');
     return historyEntry;
-  } catch (e) { }
+  } catch (e) { console.warn('[History] History-Eintrag speichern fehlgeschlagen:', e.message); }
   return null;
 }
 
@@ -1510,18 +2523,18 @@ function refreshPremiumDashboard() {
     }
 
     xpBarContainer.innerHTML = `
-      <div class="sc-xp-card" style="background:rgba(28,28,30,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.05);border-radius:16px;padding:16px;box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+      <div style="background:linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(20,25,30,0.6) 100%); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.1); border-radius:18px; padding:16px; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
         <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
           <div>
-            <div style="font-size:0.72rem; color:#8a8a8e; font-weight:600; letter-spacing:0.06em; margin-bottom:4px;">RANG-FORTSCHRITT</div>
-            <div style="font-size:1.05rem; font-weight:800; color:#fff;">${curRank.icon} ${curRank.name}</div>
+            <div style="font-size:0.75rem; color:rgba(255,255,255,0.4); font-weight:600; letter-spacing:0.05em; margin-bottom:4px;">RANG FORTSCHRITT</div>
+            <div style="font-size:1.1rem; font-weight:700; color:#fff;">${curRank.icon} ${curRank.name}</div>
           </div>
           <div style="text-align:right;">
-            <div style="font-size:0.9rem; font-weight:700; font-variant-numeric:tabular-nums; color:#39ff14;">${xp} <span style="font-size:0.7rem; color:#8a8a8e; font-weight:500;">/ ${nextRank.min === Infinity ? '∞' : nextRank.min} XP</span></div>
+            <div style="font-size:0.9rem; font-weight:700; color:#7ab030;">${xp} <span style="font-size:0.7rem; color:rgba(255,255,255,0.4); font-weight:500;">/ ${nextRank.min === Infinity ? '∞' : nextRank.min} XP</span></div>
           </div>
         </div>
         <div style="height:10px; background:rgba(255,255,255,0.08); border-radius:5px; overflow:hidden; position:relative; box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);">
-          <div style="height:100%; width:${pct}%; background:linear-gradient(90deg, #00c8ff, #7fff00); border-radius:5px; transition:width 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow:0 0 14px rgba(0,200,255,0.35);"></div>
+          <div style="height:100%; width:${pct}%; background:linear-gradient(90deg, #7ab030, #a0d84a); border-radius:5px; transition:width 1s cubic-bezier(0.4, 0, 0.2, 1); box-shadow:0 0 12px rgba(122,176,48,0.5);"></div>
         </div>
       </div>
     `;
@@ -1538,7 +2551,7 @@ function refreshPremiumDashboard() {
   try {
     const analytics = JSON.parse(localStorage.getItem('sd_enhanced_analytics') || '{}');
     historyV2 = Array.isArray(analytics.games) ? analytics.games : [];
-  } catch (e) { }
+  } catch (e) { console.warn('[Analytics] Analytics-Daten laden fehlgeschlagen:', e.message); }
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -1569,14 +2582,15 @@ function refreshPremiumDashboard() {
 
   if (historyV2.length === 0) {
     if (overviewHeader) overviewHeader.style.display = 'none';
+    if (mainStatsRow) mainStatsRow.style.display = 'none';
     if (recentListHeader) recentListHeader.style.display = 'none';
     if (recentList) recentList.style.display = 'none';
   } else {
     if (overviewHeader) overviewHeader.style.display = 'block';
+    if (mainStatsRow) mainStatsRow.style.display = 'flex';
     if (recentListHeader) recentListHeader.style.display = 'block';
     if (recentList) recentList.style.display = 'flex';
   }
-  if (mainStatsRow) mainStatsRow.style.display = 'flex';
 
   const statHits = document.querySelector('.pd-stats-row > div:nth-child(1) .pd-stat-val');
   if (statHits) statHits.innerHTML = hits + ' <span style="font-size:0.7em;color:var(--text-muted)">Schuss</span>';
@@ -1588,19 +2602,6 @@ function refreshPremiumDashboard() {
     statAcc.innerText = '- Ø';
   }
 
-  const accPct = count > 0 ? Math.min(100, Math.round(((accSum / count) / 10) * 100)) : 0;
-  const elRightAcc = document.getElementById('pdRightAcc');
-  if (elRightAcc) elRightAcc.innerText = count > 0 ? accPct + '%' : '–';
-  const elMiniAcc = document.getElementById('pdMiniBarAcc');
-  if (elMiniAcc) elMiniAcc.style.width = accPct + '%';
-  const elDashAccBottom = document.getElementById('pdDashAccBottom');
-  if (elDashAccBottom) elDashAccBottom.innerText = count > 0 ? (accSum / count).toFixed(1) + ' Ø' : '–';
-
-  const elRightShots = document.getElementById('pdRightShots');
-  if (elRightShots) elRightShots.innerText = String(hits);
-  const elMiniShots = document.getElementById('pdMiniBarShots');
-  if (elMiniShots) elMiniShots.style.width = Math.min(100, hits) + '%';
-
   // 4.5. Side Metrics (Streak & Games Today)
   const pdCurLG = Number(localStorage.getItem('sd_lg_streak') || 0) || 0;
   const pdCurKK = Number(localStorage.getItem('sd_kk_streak') || 0) || 0;
@@ -1611,6 +2612,18 @@ function refreshPremiumDashboard() {
   const elSideStreakBar = document.getElementById('pdSideStreakBar');
   if (elSideStreakBar) elSideStreakBar.style.width = Math.min(pdCurAll * 10, 100) + '%';
 
+  // StreakTracker Integration – Dashboard aktualisieren
+  if (typeof StreakTracker !== 'undefined') {
+    const stats = StreakTracker.getStreakStats();
+    const elSideStreak = document.getElementById('pdSideStreak');
+    if (elSideStreak && stats.current > 0) {
+      elSideStreak.innerText = '🔥 ' + stats.current;
+    }
+    if (elSideStreakBar && stats.current > 0) {
+      elSideStreakBar.style.width = Math.min(stats.current * 10, 100) + '%';
+    }
+  }
+
   let gamesTodayCount = historyV2.filter(g => g.timestamp && g.timestamp >= startOfDay.getTime()).length;
   const elSideGamesToday = document.getElementById('pdSideGamesToday');
   if (elSideGamesToday) elSideGamesToday.innerText = gamesTodayCount;
@@ -1618,10 +2631,27 @@ function refreshPremiumDashboard() {
   if (elSideGamesTodayBar) elSideGamesTodayBar.style.width = Math.min(gamesTodayCount * 10, 100) + '%';
 
   // 4.6. Calculate and display statistics (Siege, Siegquote, Gesamt XP)
-  const totalWins = historyV2.filter(g => g.result === 'win' || g.result === 'Sieg').length;
-  const totalGames = historyV2.length;
+  // NUR die letzten 3 Duelle zählen für diese Statistiken
+  const sortedForStats = [...historyV2].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  const latest3ForStats = sortedForStats.slice(0, 3);
+
+  const totalWins = latest3ForStats.filter(g => g.result === 'win' || g.result === 'Sieg').length;
+  const totalGames = latest3ForStats.length;
   const winRate = totalGames > 0 ? ((totalWins / totalGames) * 100).toFixed(0) : 0;
-  const totalXP = historyV2.reduce((sum, g) => sum + (g.playerScore || 0), 0);
+
+  // Gesamt XP: Nur aus den letzten 3 Duellen
+  const totalXP = latest3ForStats.reduce((sum, g) => {
+    // Verwende gespeichertes xpEarned falls vorhanden, sonst berechne es
+    if (Number.isFinite(g.xpEarned)) {
+      return sum + g.xpEarned;
+    }
+    // Fallback für alte Einträge
+    const isWin = g.result === 'win' || g.result === 'Sieg';
+    if (!isWin) return sum; // Niederlage = 0 XP
+    const diff = g.difficulty || 'easy';
+    const xpGained = XP_PER_WIN[diff] || 10;
+    return sum + xpGained;
+  }, 0);
 
   const elPdStatWins = document.getElementById('pdStatWins');
   if (elPdStatWins) elPdStatWins.innerText = totalWins;
@@ -1630,23 +2660,159 @@ function refreshPremiumDashboard() {
   if (elPdStatWinrate) elPdStatWinrate.innerText = totalGames > 0 ? winRate + '%' : '–';
 
   const elPdStatScore = document.getElementById('pdStatScore');
-  if (elPdStatScore) elPdStatScore.innerText = totalXP;
+  if (elPdStatScore) elPdStatScore.innerText = totalXP + ' XP';
 
-  const elSideRank = document.getElementById('pdSideRank');
-  if (elSideRank && typeof getRank === 'function') {
-    const r = getRank(StorageManager.get('xp', 0));
-    elSideRank.innerText = r.rank.icon + ' ' + r.rank.name;
+  // ══ 4. DYNAMISCHE ERFOLGS-BADGES ══
+  const badgesGrid = document.getElementById('pdBadgesGrid');
+  if (badgesGrid && typeof EnhancedAchievements !== 'undefined') {
+    const overview = EnhancedAchievements.getAchievementOverview();
+    const allAchievements = EnhancedAchievements.ACHIEVEMENTS || {};
+    const achievementKeys = Object.keys(allAchievements);
+
+    // Wähle die 4 interessantesten Badges aus:
+    // 1. Höchstes freigeschaltetes Achievement
+    // 2. Nächstes kurz vor dem Abschluss stehendes
+    // 3. Streak-basiertes Achievement
+    // 4. Präzisions-basiertes Achievement
+
+    const unlockedAchievements = achievementKeys
+      .filter(key => {
+        const prog = JSON.parse(localStorage.getItem('sd_enhanced_achievements') || '{}');
+        return prog[allAchievements[key].id]?.unlocked;
+      })
+      .map(key => allAchievements[key]);
+
+    const lockedAchievements = achievementKeys
+      .filter(key => {
+        const prog = JSON.parse(localStorage.getItem('sd_enhanced_achievements') || '{}');
+        return !prog[allAchievements[key].id]?.unlocked;
+      })
+      .map(key => allAchievements[key]);
+
+    // Badge-Auswahl: max. 2 freigeschaltete + 2 gesperrte (Fortschritt anzeigen)
+    const displayBadges = [
+      ...unlockedAchievements.slice(0, 2),
+      ...lockedAchievements.slice(0, 2)
+    ];
+
+    // Falls weniger als 4 Achievements vorhanden, mit Platzhaltern auffüllen
+    while (displayBadges.length < 4) {
+      displayBadges.push({
+        icon: '🔒',
+        name: 'Noch nicht\nfreigeschaltet',
+        description: 'Spiele mehr Duelle',
+        xp: 0,
+        tier: 1,
+        category: 'locked'
+      });
+    }
+
+    const badgeColors = {
+      streak: { bg: 'rgba(122,176,48,0.12)', border: 'rgba(122,176,48,0.25)', top: 'rgba(122,176,48,0.4)', text: '#7ab030', glow: 'rgba(122,176,48,0.2)' },
+      precision: { bg: 'rgba(0,195,255,0.12)', border: 'rgba(0,195,255,0.25)', top: 'rgba(0,195,255,0.4)', text: '#00c3ff', glow: 'rgba(0,195,255,0.2)' },
+      comeback: { bg: 'rgba(255,107,53,0.12)', border: 'rgba(255,107,53,0.25)', top: 'rgba(255,107,53,0.4)', text: '#ff6b35', glow: 'rgba(255,107,53,0.2)' },
+      consistency: { bg: 'rgba(156,39,176,0.12)', border: 'rgba(156,39,176,0.25)', top: 'rgba(156,39,176,0.4)', text: '#9c27b0', glow: 'rgba(156,39,176,0.2)' },
+      specialization: { bg: 'rgba(255,215,0,0.12)', border: 'rgba(255,215,0,0.25)', top: 'rgba(255,215,0,0.4)', text: '#ffd700', glow: 'rgba(255,215,0,0.2)' },
+      speed: { bg: 'rgba(255,152,0,0.12)', border: 'rgba(255,152,0,0.25)', top: 'rgba(255,152,0,0.4)', text: '#ff9800', glow: 'rgba(255,152,0,0.2)' },
+      locked: { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.08)', top: 'rgba(255,255,255,0.15)', text: 'rgba(255,255,255,0.4)', glow: 'transparent' }
+    };
+
+    badgesGrid.innerHTML = displayBadges.map((badge, idx) => {
+      const isUnlocked = unlockedAchievements.includes(badge);
+      const colors = badgeColors[badge.category] || badgeColors.locked;
+      const nameLines = badge.name.length > 12
+        ? badge.name.substring(0, 12).split(' ').slice(0, -1).join('<br>') + '<br>' + badge.name.substring(12).split(' ').slice(1).join(' ')
+        : badge.name.replace(/ /g, '<br>');
+      const progressText = isUnlocked
+        ? 'Freigeschaltet'
+        : `+${badge.xp} XP`;
+
+      return `
+        <div style="background:linear-gradient(145deg, ${colors.bg} 0%, rgba(20,25,30,0.7) 100%);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid ${colors.border};border-top:1px solid ${colors.top};border-radius:14px;padding:12px 6px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,0.3), inset 0 1px 1px ${colors.glow};${!isUnlocked ? 'opacity:0.6;' : ''}">
+          <div style="font-size:1.7rem;margin-bottom:5px;${!isUnlocked ? 'filter:grayscale(1);' : ''}">${badge.icon}</div>
+          <div style="font-size:0.62rem;font-weight:600;color:#fff;line-height:1.15;margin-bottom:3px;">${nameLines}</div>
+          <div style="font-size:0.58rem;color:${colors.text};font-weight:500;">${progressText}</div>
+        </div>
+      `;
+    }).join('');
+  } else if (badgesGrid) {
+    // Fallback wenn EnhancedAchievements nicht verfügbar
+    badgesGrid.innerHTML = `
+      <div style="background:linear-gradient(145deg, rgba(122,176,48,0.12) 0%, rgba(20,25,30,0.7) 100%);backdrop-filter:blur(16px);border:1px solid rgba(122,176,48,0.25);border-radius:14px;padding:12px 6px;text-align:center;">
+        <div style="font-size:1.7rem;margin-bottom:5px;">🎯</div>
+        <div style="font-size:0.62rem;font-weight:600;color:#fff;">Spiele ein<br>Duell</div>
+        <div style="font-size:0.58rem;color:#7ab030;">Erste Erfolge</div>
+      </div>
+    `.repeat(4);
   }
 
-  // 4. Update Badges
-  const streakHeaderVal = (typeof getHeaderStreakValue === 'function') ? getHeaderStreakValue() : 0;
-  const badgeStreak = document.querySelectorAll('.pd-badge-card')[3];
-  if (badgeStreak) {
-    const lvlEl = badgeStreak.querySelector('.pd-badge-lvl');
-    if (lvlEl) lvlEl.innerText = streakHeaderVal + ' Tage';
+  // ══ 5. STREAK-BANNER MIT ECHTEN DATEN + COUNTDOWN ══
+  const streakBanner = document.getElementById('streakBanner');
+  if (streakBanner && typeof DailyChallenge !== 'undefined') {
+    const dailyState = DailyChallenge.getState ? DailyChallenge.getState() : null;
+    const streakCount = dailyState?.streak || 0;
+    const allCompleted = dailyState?.challenges?.every(c => c.completed) || false;
+    const claimed = dailyState?.toolboxDroppedForDate === dailyState?.dateId || false;
+
+    let streakColor1 = '#ff6b35';
+    let streakColor2 = '#ff9500';
+    let streakIcon = '🔥';
+    let streakLabel = 'Tages-Streak';
+
+    if (streakCount >= 14) {
+      streakColor1 = '#ffd700'; streakColor2 = '#ffaa00'; streakIcon = '👑'; streakLabel = 'Meister-Streak';
+    } else if (streakCount >= 7) {
+      streakColor1 = '#7ab030'; streakColor2 = '#a0d84a'; streakIcon = '⚡'; streakLabel = 'Wochen-Streak';
+    } else if (streakCount >= 3) {
+      streakColor1 = '#00c3ff'; streakColor2 = '#7ab030'; streakIcon = '🔥'; streakLabel = 'Aufbau-Streak';
+    }
+
+    // Countdown bis Reset
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const msLeft = Math.max(0, nextMidnight.getTime() - now.getTime());
+    const minsLeft = Math.floor(msLeft / 60000);
+    const hLeft = Math.floor(minsLeft / 60);
+    const mLeft = minsLeft % 60;
+    const countdownStr = `${String(hLeft).padStart(2, '0')}:${String(mLeft).padStart(2, '0')}`;
+
+    const streakPct = Math.min(streakCount * 10, 100);
+
+    streakBanner.innerHTML = `
+      <div style="background:linear-gradient(145deg, rgba(45,50,55,0.35) 0%, rgba(10,12,15,0.7) 100%);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px;box-shadow:0 6px 20px rgba(0,0,0,0.4);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:1.8rem;">${streakIcon}</div>
+            <div>
+              <div style="font-size:0.65rem;color:rgba(255,255,255,0.4);font-weight:600;letter-spacing:0.05em;">${streakLabel.toUpperCase()}</div>
+              <div style="font-size:1.3rem;font-weight:700;color:#fff;">${streakCount} Tage</div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:0.6rem;color:rgba(255,255,255,0.35);margin-bottom:2px;">Reset in</div>
+            <div style="font-size:0.9rem;font-weight:600;color:rgba(255,255,255,0.6);font-variant-numeric:tabular-nums;" id="streakCountdownTimer">${countdownStr}</div>
+          </div>
+        </div>
+        <div style="height:4px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${streakPct}%;background:linear-gradient(90deg,${streakColor1},${streakColor2});border-radius:4px;transition:width 0.5s ease;"></div>
+        </div>
+        ${allCompleted && claimed ? '<div style="font-size:0.6rem;color:#7ab030;margin-top:6px;text-align:center;">✅ Heute alle Missionen erfüllt!</div>' : ''}
+      </div>
+    `;
   }
 
-  // 5. Last 3 Duels dynamic rendering
+  // StreakProgressBar aktualisieren
+  const streakProgressBar = document.getElementById('streakProgressBar');
+  if (streakProgressBar) {
+    const dailyState2 = typeof DailyChallenge !== 'undefined' && DailyChallenge.getState ? DailyChallenge.getState() : null;
+    const streakCount2 = dailyState2?.streak || 0;
+    const streakPct2 = Math.min(streakCount2 * 10, 100);
+    const inner = streakProgressBar.querySelector('div');
+    if (inner) inner.style.width = streakPct2 + '%';
+  }
+
+  // 6. Last 3 Duels dynamic rendering
   const last3Container = document.getElementById('pdLast3Duels');
   if (last3Container && historyV2.length > 0) {
     // historyV2 is already sorted or we sort it here to be safe
@@ -1656,7 +2822,7 @@ function refreshPremiumDashboard() {
     let l3Html = '';
     latest3.forEach(game => {
       const isWin = game.result === 'win' || game.result === 'Sieg';
-      const color = isWin ? '#39ff14' : '#f06050';
+      const color = isWin ? '#7ab030' : '#f06050';
       const label = isWin ? '✓ Sieg' : '✗ Niederlage';
       const diff = game.difficulty || 'Mittel';
       
@@ -1687,10 +2853,28 @@ function refreshPremiumDashboard() {
         }
       }
 
+      // XP anzeigen - verwende gespeichertes xpEarned falls vorhanden
+      let xpText = '';
+      if (Number.isFinite(game.xpEarned)) {
+        // Verwende gespeicherte XP
+        xpText = game.xpEarned > 0 ? `+${game.xpEarned} XP` : '0 XP';
+      } else {
+        // Fallback für alte Einträge
+        if (isWin) {
+          const xpGained = XP_PER_WIN[diff] || 10;
+          xpText = `+${xpGained} XP`;
+        } else {
+          xpText = '0 XP';
+        }
+      }
+
       l3Html += `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid ${color};">
-          <div><span style="color:#fff;font-weight:500;font-size:0.8rem;">${displayDisc}</span> <span style="font-size:0.65rem;color:rgba(255,255,255,0.35);">${diff}</span></div>
-          <div style="font-size:0.75rem;font-weight:600;color:${color};">${label}</div>
+        <div style="display:flex;flex-direction:column;gap:4px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid ${color};">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div><span style="color:#fff;font-weight:500;font-size:0.8rem;">${displayDisc}</span> <span style="font-size:0.65rem;color:rgba(255,255,255,0.35);">${diff}</span></div>
+            <div style="font-size:0.75rem;font-weight:600;color:${color};">${label}</div>
+          </div>
+          <div style="font-size:0.65rem;font-weight:500;color:rgba(255,255,255,0.5);">${xpText}</div>
         </div>
       `;
     });
@@ -1706,7 +2890,7 @@ function refreshPremiumDashboard() {
     try {
       const stored = localStorage.getItem('sd_daily_challenge');
       if (stored) dailyState = JSON.parse(stored);
-    } catch (e) { }
+    } catch (e) { console.warn('[Daily] Daily-Challenge laden fehlgeschlagen:', e.message); }
 
     let questHtml = `
       <div style="font-size:1.05rem; font-weight:600; color:#fff; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
@@ -1747,10 +2931,10 @@ function refreshPremiumDashboard() {
                 ${desc}
               </div>
               <div style="height:4px; background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden;">
-                <div style="height:100%; width:${pct}%; background:${c.completed ? '#39ff14' : 'linear-gradient(90deg, #00c8ff, #7fff00)'}; border-radius:2px; transition:width 0.8s ease;"></div>
+                <div style="height:100%; width:${pct}%; background:${c.completed ? '#7ab030' : 'linear-gradient(90deg, #00c3ff, #0088ff)'}; border-radius:2px; transition:width 0.8s ease;"></div>
               </div>
             </div>
-            <div style="font-size:0.75rem; font-weight:700; color:${c.completed ? '#39ff14' : 'rgba(255,255,255,0.3)'}; min-width:35px; text-align:right;">
+            <div style="font-size:0.75rem; font-weight:700; color:${c.completed ? '#7ab030' : 'rgba(255,255,255,0.3)'}; min-width:35px; text-align:right;">
               ${c.completed ? 'ERLEDIGT' : c.progress + '/' + target}
             </div>
           </div>
@@ -1807,41 +2991,6 @@ function refreshPremiumDashboard() {
     });
     recentList.innerHTML = listHtml;
   }
-
-  const arc = document.getElementById('pdGaugeArc');
-  const gPct = document.getElementById('pdGaugePct');
-  const gSub = document.getElementById('pdGaugeSub');
-  const chProg = document.getElementById('pdChallengeProgCur');
-  const goalTxt = document.getElementById('pdChallengeProgGoal');
-  const dailyGoalPts = document.getElementById('pdDailyGoalPts');
-  if (arc && gPct) {
-    let pct = 0;
-    let cur = 0;
-    let goal = 250;
-    try {
-      const st = JSON.parse(localStorage.getItem('sd_daily_challenge') || '{}');
-      const ch0 = st.challenges && st.challenges[0];
-      if (ch0 && typeof DailyChallenge !== 'undefined' && typeof DailyChallenge.getChallengeRef === 'function') {
-        const ref = DailyChallenge.getChallengeRef(ch0.id);
-        if (ref) {
-          goal = ref.target || 1;
-          cur = Math.min(goal, ch0.progress || 0);
-          pct = Math.min(100, Math.round((cur / goal) * 100));
-        }
-      }
-    } catch (e) { }
-    if (dailyGoalPts) dailyGoalPts.innerText = String(goal);
-    if (goalTxt) goalTxt.innerText = '/' + goal;
-    if (chProg) chProg.innerText = String(cur);
-    gPct.innerText = pct + '%';
-    if (gSub) gSub.innerText = cur + '/' + goal + ' Pkt.';
-    const L = 100;
-    arc.style.strokeDasharray = String(L);
-    arc.style.transition = 'stroke-dashoffset 1.2s ease-out';
-    requestAnimationFrame(() => {
-      arc.style.strokeDashoffset = String(L - pct);
-    });
-  }
 }
 
 function renderHistory() {
@@ -1855,8 +3004,8 @@ function renderHistory() {
     }
     el.innerHTML = hist.map(h => {
       const resLabel = h.result === 'win' ? 'S' : h.result === 'lose' ? 'N' : 'U';
-      const pPts = h.playerPts != null ? parseFloat(h.playerPts).toFixed(1) : '–';
-      const bPts = h.botPts != null ? parseFloat(h.botPts).toFixed(1) : '–';
+      const pPts = h.playerPts !== null ? parseFloat(h.playerPts).toFixed(1) : '–';
+      const bPts = h.botPts !== null ? parseFloat(h.botPts).toFixed(1) : '–';
       const weaponUpper = (h.weapon || (h.weaponName === 'Luftgewehr' ? 'lg' : h.weaponName === 'Kleinkaliber' ? 'kk' : h.weaponName) || 'LG').toUpperCase();
       let discUpper = (h.disciplineName || h.discipline || '').toString().toUpperCase();
       if (discUpper.startsWith(weaponUpper)) {
@@ -1910,10 +3059,10 @@ function renderPerformanceChart() {
 
   // Daten laden, filtern, auf 15 begrenzen, älteste links
   let hist = [];
-  try { hist = JSON.parse(localStorage.getItem('sd_history') || '[]'); } catch (e) { }
+  try { hist = JSON.parse(localStorage.getItem('sd_history') || '[]'); } catch (e) { console.warn('[History] History laden fehlgeschlagen:', e.message); }
 
   const filtered = hist
-    .filter(h => h.weapon === _perfWeapon && h.playerPts != null)
+    .filter(h => h.weapon === _perfWeapon && h.playerPts !== null)
     .slice(0, 15)
     .reverse();
 
@@ -1925,7 +3074,7 @@ function renderPerformanceChart() {
       // Zeige ob überhaupt History-Daten vorhanden sind
       const totalHist = hist.length;
       const otherWeapon = _perfWeapon === 'lg' ? 'KK' : 'LG';
-      const otherCount = hist.filter(h => h.weapon !== _perfWeapon && h.playerPts != null).length;
+      const otherCount = hist.filter(h => h.weapon !== _perfWeapon && h.playerPts !== null).length;
       emptyEl.innerHTML = totalHist === 0
         ? 'Noch keine Daten.<br><span style="font-size:.6rem;opacity:.5;">Spiel ein Duell und gib dein Ergebnis ein!</span>'
         : `Keine ${_perfWeapon.toUpperCase()}-Daten.<br><span style="font-size:.6rem;opacity:.5;">${otherCount} ${otherWeapon}-Einträge vorhanden → Toggle wechseln</span>`;
@@ -1961,12 +3110,24 @@ function renderPerformanceChart() {
   });
 
   // Gradient-Fill — feste Höhe 160 damit er auch vor erstem Paint funktioniert
-  const ctx2d = canvas.getContext('2d');
+  let ctx2d;
+  try {
+    ctx2d = canvas.getContext('2d');
+  } catch (e) {
+    console.warn('[Chart] Canvas getContext fehlgeschlagen:', e.message);
+    canvas.style.display = 'none';
+    if (emptyEl) {
+      emptyEl.style.display = 'flex';
+      emptyEl.innerHTML = 'Chart nicht verfügbar.<br><span style="font-size:.6rem;opacity:.5;">Chart.js konnte nicht geladen werden.</span>';
+    }
+    return;
+  }
   const boxH = canvas.parentElement?.offsetHeight || 160;
   const grad = ctx2d.createLinearGradient(0, 0, 0, boxH);
   grad.addColorStop(0, `rgba(${accentRgb},.22)`);
   grad.addColorStop(1, `rgba(${accentRgb},0)`);
 
+  try {
   _perfChart = new Chart(ctx2d, {
     type: 'line',
     data: {
@@ -2044,6 +3205,14 @@ function renderPerformanceChart() {
       }
     }
   });
+  } catch (e) {
+    console.warn('[Chart] Chart.js Erstellung fehlgeschlagen:', e.message);
+    canvas.style.display = 'none';
+    if (emptyEl) {
+      emptyEl.style.display = 'flex';
+      emptyEl.innerHTML = 'Chart nicht verfügbar.<br><span style="font-size:.6rem;opacity:.5;">Chart.js konnte nicht initialisiert werden.</span>';
+    }
+  }
 }
 
 function getBestStreak() {
@@ -2095,7 +3264,7 @@ function getSunEarned() {
 }
 
 function saveSunEarned(e) {
-  try { localStorage.setItem('sd_sun', JSON.stringify(e)); } catch (_) { }
+  try { localStorage.setItem('sd_sun', JSON.stringify(e)); } catch (e) { console.warn('[Sun] Sun-Daten speichern fehlgeschlagen:', e.message); }
 }
 
 function showSunPop(achievement) {
@@ -2284,10 +3453,13 @@ function getShortOwnerId(value) {
 
 function updateAccountSyncStatus() {
   const node = document.getElementById('accountSyncStatus');
+  const iconEl = document.getElementById('syncStatusIcon');
+  const textEl = document.getElementById('syncStatusText');
   if (!node) return;
 
   if (!fbReady) {
-    node.textContent = 'Firebase ist aktuell nicht aktiv.';
+    if (iconEl) iconEl.textContent = '⚠️';
+    if (textEl) textEl.textContent = 'Firebase ist aktuell nicht aktiv. Sync ist nicht möglich.';
     return;
   }
 
@@ -2302,13 +3474,57 @@ function updateAccountSyncStatus() {
     : '';
 
   if (!authUid) {
-    node.textContent = 'Firebase verbindet dieses Gerät gerade...';
+    if (iconEl) iconEl.textContent = '🔄';
+    if (textEl) textEl.textContent = 'Firebase Authentifizierung läuft...';
     return;
   }
 
   const modeText = isLinked ? 'mit anderem Gerät verknüpft' : 'lokales Hauptkonto';
-  node.textContent = `Konto ${getShortOwnerId(ownerId || authUid)} · ${modeText} · Queue ${queue.length}${retryText}`;
+  const syncStatus = queue.length > 0 ? `${queue.length} Änderungen in Warteschlange` : 'Alle Daten synchron';
+  const syncIcon = queue.length > 0 ? '📤' : '✅';
+
+  if (iconEl) iconEl.textContent = syncIcon;
+  if (textEl) {
+    textEl.innerHTML = `
+      <div style="font-weight:600;margin-bottom:2px;">Konto ${getShortOwnerId(ownerId || authUid)}</div>
+      <div style="opacity:0.7;">${modeText}</div>
+      <div style="opacity:0.6;font-size:0.7rem;margin-top:2px;">${syncStatus}${retryText}</div>
+    `;
+  }
 }
+
+// Cloud-Sync manuell anstoßen
+window.forceCloudSync = async function() {
+  if (!fbReady || !fbDb) {
+    alert('Firebase ist aktuell nicht aktiv.');
+    return;
+  }
+
+  const btn = event?.target;
+  if (btn) {
+    btn.textContent = '⏳ Sync läuft...';
+    btn.disabled = true;
+  }
+
+  try {
+    await pushProfileToFirebase();
+    await flushFirebaseSyncQueue();
+
+    updateAccountSyncStatus();
+
+    if (btn) {
+      btn.textContent = '✅ Synchronisiert!';
+      setTimeout(() => { btn.textContent = '🔄 Jetzt synchronisieren'; btn.disabled = false; }, 2000);
+    }
+  } catch (error) {
+    console.error('Force sync failed:', error);
+    if (btn) {
+      btn.textContent = '❌ Fehlgeschlagen';
+      setTimeout(() => { btn.textContent = '🔄 Jetzt synchronisieren'; btn.disabled = false; }, 2000);
+    }
+    alert('Synchronisierung fehlgeschlagen: ' + (error?.message || 'Unbekannter Fehler'));
+  }
+};
 
 function isDebugToolsEnabled() {
   try {
@@ -2746,62 +3962,125 @@ async function generateAccountLinkCode() {
 }
 
 async function connectDeviceWithLinkCode(rawCode) {
-  const code = normalizePairCode(rawCode || prompt('Sync-Code eingeben'));
-  if (!code) return false;
+  const code = normalizePairCode(rawCode || prompt('Sync-Code eingeben (6-8 Zeichen):'));
+  if (!code || code.length < 4) {
+    if (code) alert('Der Code muss mindestens 4 Zeichen haben.');
+    return false;
+  }
+
+  if (!fbReady) {
+    alert('Firebase ist aktuell nicht aktiv. Bitte warte einen Moment oder lade die Seite neu.');
+    return false;
+  }
 
   const user = fbUser || await ensureFirebaseAnonymousAuth();
   if (!user || !fbDb) {
-    alert('Firebase ist aktuell nicht bereit.');
+    alert('Firebase-Authentifizierung fehlgeschlagen. Bitte versuche es erneut.');
     return false;
   }
 
-  const linkSnap = await fbDb.ref(getAccountPairCodePath(code)).once('value');
-  const link = linkSnap.val();
-  if (!link || !link.accountId) {
-    alert('Sync-Code nicht gefunden.');
-    return false;
-  }
-  if (Number(link.expiresAt) < Date.now()) {
+  try {
+    const linkSnap = await fbDb.ref(getAccountPairCodePath(code)).once('value');
+    const link = linkSnap.val();
+    if (!link || !link.accountId) {
+      alert('❌ Sync-Code nicht gefunden.\n\nBitte überprüfe den Code und versuche es erneut.');
+      return false;
+    }
+    if (Number(link.expiresAt) < Date.now()) {
+      await fbDb.ref(getAccountPairCodePath(code)).remove().catch(() => { });
+      alert('❌ Sync-Code ist abgelaufen (15 Min).\n\nBitte erzeugen einen neuen Code auf dem Hauptgerät.');
+      return false;
+    }
+
+    await fbDb.ref(getAccountLinkMapPath(user.uid)).set({
+      accountId: link.accountId,
+      authUid: user.uid,
+      linkedAt: Date.now(),
+      source: 'pair_code',
+      pairCode: code,
+      createdByUid: link.authUid || ''
+    });
     await fbDb.ref(getAccountPairCodePath(code)).remove().catch(() => { });
-    alert('Sync-Code ist abgelaufen.');
+
+    fbAccountId = link.accountId;
+    fbCloudBootstrapUid = '';
+    await bootstrapCloudUser(user, { force: true });
+    updateAccountSyncStatus();
+    refreshDebugPanel();
+
+    // Erfolg-Meldung mit Details
+    alert(`✅ Gerät erfolgreich verbunden!\n\nKonto: ${link.username || getShortOwnerId(link.accountId)}\nSync läuft jetzt automatisch.`);
+    return true;
+  } catch (error) {
+    console.error('Device connection error:', error);
+    alert(`❌ Verbindung fehlgeschlagen.\n\nFehler: ${error?.message || 'Unbekannter Fehler'}\nBitte versuche es erneut.`);
     return false;
   }
-
-  await fbDb.ref(getAccountLinkMapPath(user.uid)).set({
-    accountId: link.accountId,
-    authUid: user.uid,
-    linkedAt: Date.now(),
-    source: 'pair_code',
-    pairCode: code,
-    createdByUid: link.authUid || ''
-  });
-  await fbDb.ref(getAccountPairCodePath(code)).remove().catch(() => { });
-
-  fbAccountId = link.accountId;
-  fbCloudBootstrapUid = '';
-  await bootstrapCloudUser(user, { force: true });
-  updateAccountSyncStatus();
-  refreshDebugPanel();
-  alert(`Gerät verbunden. Konto: ${link.username || link.accountId}`);
-  return true;
 }
 
 async function showAccountSyncCode() {
+  if (!fbReady) {
+    alert('Firebase ist noch nicht bereit. Bitte warte einen Moment.');
+    return;
+  }
+
   try {
     const data = await generateAccountLinkCode();
     if (!data) {
-      alert('Sync-Code konnte nicht erzeugt werden.');
+      alert('Sync-Code konnte nicht erzeugt werden.\n\nBitte versuche es erneut.');
       return;
     }
+
+    // In die Zwischenablage kopieren
+    let clipboardSuccess = false;
     try {
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(data.code);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(data.code);
+        clipboardSuccess = true;
+      }
     } catch (error) {
       console.warn('Clipboard write failed:', error);
     }
-    alert(`Sync-Code: ${data.code}\nGueltig bis: ${new Date(data.expiresAt).toLocaleTimeString('de-DE')}\n\nAuf dem zweiten Geraet in "Geraet verbinden" eingeben.`);
+
+    const expiresAt = new Date(data.expiresAt);
+    const expiresTime = expiresAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
+    // Schönes Modal/Overlay statt alert
+    const overlay = document.createElement('div');
+    overlay.id = 'syncCodeOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:100000;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:linear-gradient(145deg, rgba(30,35,40,0.95) 0%, rgba(15,18,20,0.98) 100%);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:24px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:2.5rem;margin-bottom:10px;">🔗</div>
+          <div style="font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:5px;">Sync-Code erzeugt</div>
+          <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">Gültig bis ${expiresTime} Uhr</div>
+        </div>
+
+        <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(122,176,48,0.3);border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
+          <div style="font-size:1.8rem;font-weight:800;color:#7ab030;letter-spacing:0.15em;font-family:'DM Mono',monospace;" id="syncCodeDisplay">${data.code}</div>
+        </div>
+
+        <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:16px;line-height:1.4;">
+          ${clipboardSuccess ? '✅ Code wurde in die Zwischenablage kopiert!' : '⚠️ Code manuell kopieren und auf dem anderen Gerät eingeben.'}
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button onclick="document.getElementById('syncCodeOverlay')?.remove()" style="flex:1;padding:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;">
+            Schließen
+          </button>
+          <button onclick="navigator.clipboard?.writeText('${data.code}');this.textContent='✅ Kopiert!';setTimeout(()=>this.textContent='Kopieren',1500)" style="flex:1;padding:12px;background:linear-gradient(135deg,#00c3ff,#7ab030);border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;">
+            📋 Kopieren
+          </button>
+        </div>
+      </div>
+    `;
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+
   } catch (error) {
     console.warn('Sync code generation failed:', error);
-    alert('Sync-Code konnte nicht erzeugt werden.');
+    alert('Sync-Code konnte nicht erzeugt werden.\n\nFehler: ' + (error?.message || 'Unbekannt'));
   }
 }
 
@@ -3099,7 +4378,25 @@ function queueLeaderboardEntry(reason = 'leaderboard_sync') {
   return true;
 }
 
+// Cloud-Sync Debounce (verhindert Firebase-Überflutung bei schnellen Aktionen)
+let _cloudSyncDebounceTimers = {};
+const CLOUD_SYNC_DEBOUNCE_MS = 2000;
+
 function scheduleCloudSync(reason = 'local_change', options = {}) {
+  // Debounce für häufige Calls
+  if (_cloudSyncDebounceTimers[reason]) {
+    clearTimeout(_cloudSyncDebounceTimers[reason]);
+  }
+  
+  return new Promise((resolve) => {
+    _cloudSyncDebounceTimers[reason] = setTimeout(() => {
+      delete _cloudSyncDebounceTimers[reason];
+      doScheduleCloudSync(reason, options).then(resolve);
+    }, options.immediate ? 0 : CLOUD_SYNC_DEBOUNCE_MS);
+  });
+}
+
+function doScheduleCloudSync(reason = 'local_change', options = {}) {
   markCloudStateDirty(reason);
 
   if (fbUser) {
@@ -3127,7 +4424,7 @@ function scheduleCloudSync(reason = 'local_change', options = {}) {
     });
   }
 
-  if (options.immediate) return flushFirebaseSyncQueue();
+  if (options.immediate) return Promise.resolve(true);
 
   scheduleFirebaseQueueFlush(options.delay ?? 800);
   return Promise.resolve(true);
@@ -3529,10 +4826,12 @@ function bindFirebaseAuth() {
     if (!fbUser) {
       fbAccountId = '';
       updateAccountSyncStatus();
+      updateGoogleLoginUI(null);
       ensureFirebaseAnonymousAuth();
       return;
     }
     updateAccountSyncStatus();
+    updateGoogleLoginUI(user);
     bootstrapCloudUser(fbUser);
   });
 
@@ -3917,6 +5216,7 @@ function initDOMCache() {
     'playerInp', 'playerInpInt', 'inpHint', 'autoInt', 'autoIntVal', 'entryTag',
     'goP', 'goB', 'goPInt', 'goBInt', 'goPUnit', 'goTitle', 'goSub', 'goEmoji', 'goReason', 'goMargin', 'analysisResult',
     'feedbackCount',
+    'fbResultIcon', 'fbResultTitle', 'fbResultScore', 'fbComment', 'fbCounter', 'fbSubmitBtn',
     'wTabLG', 'wTabKK', 'discTabs',
     'posBar', 'posItem0', 'posItem1', 'posItem2', 'posShots0', 'posShots1', 'posShots2',
     'scFire', 'scN', 'scLbl',
@@ -4709,11 +6009,7 @@ function botAutoFire() {
       setTimeout(() => updatePosBar(), 200);
     } else { updatePosBar(); }
     // Wait for DOM to update before scrolling to ensure scrollHeight is current
-    requestAnimationFrame(() => {
-      if (DOM.shotLogWrap) {
-        DOM.shotLogWrap.scrollTop = DOM.shotLogWrap.scrollHeight;
-      }
-    });
+    autoScrollShotLog();
   } else {
     const pill = document.createElement('span');
     pill.className = 'sl-pill ' + pillCls;
@@ -4854,6 +6150,9 @@ function startBattle() {
 
   updateBattleUI();
   showScreen('screenBattle');
+
+  // Bot-Zustandsanzeige starten
+  if (typeof startBotStatusUpdates === 'function') startBotStatusUpdates();
 
   // Reset Bot-Start-Flag
   G.botStarted = false;
@@ -5348,11 +6647,7 @@ function doBattleFire() {
         updatePosBar();
       }
       // Wait for DOM to update before scrolling to ensure scrollHeight is current
-      requestAnimationFrame(() => {
-        if (DOM.shotLogWrap) {
-          DOM.shotLogWrap.scrollTop = DOM.shotLogWrap.scrollHeight;
-        }
-      });
+      autoScrollShotLog();
     } else {
       // Flat log: show last 10
       if (DOM.shotLog) {
@@ -5896,7 +7191,7 @@ function showGameOver(pp, bp, reason, ppInt, detectedShots = null) {
 
   DOM.goP.textContent = pp >= 0 ? (kk3x20 ? Math.floor(pp) : fmtPts(pp)) : '–';
   DOM.goB.textContent = kk3x20 ? G.botTotalInt : fmtPts(bp);
-  DOM.goPInt.textContent = ppInt != null ? ppInt : (pp >= 0 ? Math.floor(pp) : '–');
+  DOM.goPInt.textContent = ppInt !== null ? ppInt : (pp >= 0 ? Math.floor(pp) : '–');
   DOM.goBInt.textContent = G.botTotalInt;
   DOM.goPUnit.textContent = pp >= 0 ? (kk3x20 ? '' : 'Zehntel') : '';
 
@@ -5925,7 +7220,7 @@ function showGameOver(pp, bp, reason, ppInt, detectedShots = null) {
     `${discCfg.name} · ${G.dist} m · ${diffCfg.lbl.replace(/[^\w\s✦]/gi, '').trim()} · ${G.maxShots} Schuss${xStr}${dnfStr}`;
 
   const useInt = kk3x20;
-  const ppCmp = useInt ? (ppInt != null ? ppInt : Math.floor(pp)) : pp;
+  const ppCmp = useInt ? (ppInt !== null ? ppInt : Math.floor(pp)) : pp;
   const bpCmp = useInt ? G.botTotalInt : bp;
   const diff = useInt ? (ppCmp - bpCmp) : Math.round((pp - bp) * 10) / 10;
   const absDiff = Math.abs(diff);
@@ -5988,6 +7283,13 @@ function showGameOver(pp, bp, reason, ppInt, detectedShots = null) {
   // Record stats + history + check SUN
   if (!G.dnf || gameResult !== 'win') {
     recordGameResult(gameResult, G.diff, G.weapon, pp, bp);
+
+    // NEU: Reward System tracken
+    if (typeof RewardSystem !== 'undefined') {
+      const currentStreak = G.streak || 0;
+      RewardSystem.trackGame(gameResult, G.diff, currentStreak);
+    }
+
     // Quests nur bei echtem Ergebnis (OCR oder manuelle Eingabe) berechnen
     // Schnellauswahl (reason enthält 'Schnellauswahl') wird ignoriert
     const isQuickResult = reason && reason.includes('Schnellauswahl');
@@ -6028,6 +7330,14 @@ function showGameOver(pp, bp, reason, ppInt, detectedShots = null) {
       };
       DailyChallenge.trackGame(gameData, statsData);
     }
+
+    // StreakTracker: 1 Duell = +1 Streak (Mo-Fr ab 12:00)
+    if (typeof StreakTracker !== 'undefined') {
+      const streakResult = StreakTracker.recordGame();
+      if (streakResult.streakIncreased && streakResult.milestone) {
+        console.log('[Streak] Milestone erreicht:', streakResult.milestone);
+      }
+    }
   }
 
   // Update UI in case user views result details
@@ -6050,7 +7360,7 @@ function showGameOver(pp, bp, reason, ppInt, detectedShots = null) {
     title: DOM.goTitle.textContent,
     resultClass: gameResult,
     playerPts: kk3x20
-      ? String(ppInt != null ? ppInt : Math.floor(pp))
+      ? String(ppInt !== null ? ppInt : Math.floor(pp))
       : fmtPts(pp),
     botPts: kk3x20
       ? String(G.botTotalInt)
@@ -6060,11 +7370,24 @@ function showGameOver(pp, bp, reason, ppInt, detectedShots = null) {
     meta: `${DISC[G.discipline]?.name || G.discipline} · ${G.dist}m · ${G.maxShots} Schuss`,
   };
 
+  // Bot-Zustandsanzeige stoppen
+  if (typeof stopBotStatusUpdates === 'function') stopBotStatusUpdates();
+
   // Zuerst screenOver anzeigen, dann dynamisch zur Umfrage wechseln, falls nötig
   showScreen('screenOver');
 
+  // NEW: Show v2 feedback screen with duel data
+  const result = G.playerTotal >= G.botTotal ? 'win' : G.playerTotal < G.botTotal ? 'loss' : 'draw';
+  const duelResultData = {
+    discipline: DISC[G.discipline]?.name || G.discipline,
+    opponent: G.botName || undefined,
+    result: result,
+    score: `Score: ${G.playerTotal} / ${G.botTotal}`
+  };
+
   if (shouldShowFeedback(totalDuels)) {
-    scheduleFeedbackPrompt(totalDuels);
+    // Instead of old prompt, show v2 feedback after short delay
+    setTimeout(() => showFeedbackScreen(totalDuels, duelResultData), 2500);
   }
 
   HealthyEngagement.onMatchFinished(G.gameDuration);
@@ -6171,7 +7494,7 @@ async function doShare() {
         stats.count = (stats.count || 0) + 1;
         stats.last = Date.now();
         localStorage.setItem('sd_shares', JSON.stringify(stats));
-      } catch (_) { }
+      } catch (e) { console.warn('[Share] Share-Stats speichern fehlgeschlagen:', e.message); }
     } catch (err) {
       if (err.name !== 'AbortError') console.warn('Share failed:', err);
     }
@@ -6238,6 +7561,7 @@ function hardResetProgress() {
 function restartGame() {
   clearPendingFeedbackPrompt();
   clearBattleTimers();
+  if (typeof stopBotStatusUpdates === 'function') stopBotStatusUpdates();
   G.targetShots = [];
   G.botShots = []; G.botPlan = null; G.botTotal = 0; G.botTotalInt = 0; G._botTotalTenths = 0;
   G.playerTotal = 0; G.playerTotalInt = 0; G._playerTotalTenths = 0;
@@ -6267,6 +7591,8 @@ function showScreen(id) {
   if (id !== 'screenOver') clearPendingFeedbackPrompt();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // Scroll-Position zurücksetzen für konsistentes UX
+  window.scrollTo(0, 0);
   if (id === 'screenSetup') {
     RookiePlan.evaluateAndRender(true);
     if (typeof refreshPremiumDashboard === 'function') refreshPremiumDashboard();
@@ -6421,6 +7747,11 @@ Object.assign(window, {
   restartGame,
   submitSiteFeedback,
   skipSiteFeedback,
+  fbSetDuel,
+  fbSetRating,
+  fbToggleTag,
+  fbSubmit,
+  fbUpdateCounter,
   closeShareCard,
   doShare,
   copyShareLink
@@ -6502,7 +7833,48 @@ window.addEventListener('resize', () => {
 // ── Service Worker (PWA / Offline) ──────────────────────────────────
 if ('serviceWorker' in navigator && typeof MobileFeatures === 'undefined') {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=2.6').catch(() => { });
+    navigator.serviceWorker.register('./sw.js?v=2.7').catch(() => { });
+  });
+}
+
+// ── Streak Countdown Timer (aktualisiert jede Minute) ───────────────
+let _streakCountdownInterval = null;
+function startStreakCountdown() {
+  if (_streakCountdownInterval) clearInterval(_streakCountdownInterval);
+
+  function updateCountdown() {
+    const timerEl = document.getElementById('streakCountdownTimer');
+    if (!timerEl) return;
+
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const msLeft = Math.max(0, nextMidnight.getTime() - now.getTime());
+    const minsLeft = Math.floor(msLeft / 60000);
+    const hLeft = Math.floor(minsLeft / 60);
+    const mLeft = minsLeft % 60;
+    timerEl.textContent = `${String(hLeft).padStart(2, '0')}:${String(mLeft).padStart(2, '0')}`;
+
+    // Wenn Mitternacht erreicht → Dashboard neu laden
+    if (msLeft <= 0) {
+      if (typeof refreshPremiumDashboard === 'function') refreshPremiumDashboard();
+    }
+  }
+
+  updateCountdown();
+  _streakCountdownInterval = setInterval(updateCountdown, 30000); // Alle 30s aktualisieren
+}
+
+// Countdown starten wenn Dashboard sichtbar ist
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(startStreakCountdown, 1000);
+    
+    // Auth Form Listener initialisieren
+    setTimeout(() => {
+      initAuthFormListeners();
+      injectAuthSpinnerCSS();
+    }, 500);
   });
 }
 
