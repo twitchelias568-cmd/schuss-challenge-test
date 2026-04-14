@@ -221,19 +221,24 @@ const G = {
 };
 
 // Shot Log Auto-Scroll mit Debounce (verhindert Race Conditions bei schnellen Schüssen)
+// BUG-FIX #4: Double rAF sorgt dafür dass DOM-Layout aktualisiert wird bevor scrollHeight gelesen wird
 let _shotLogScrollPending = false;
 function autoScrollShotLog() {
   if (_shotLogScrollPending) return;
   _shotLogScrollPending = true;
+  // Erster rAF: Browser beginnt Layout-Update
   requestAnimationFrame(() => {
-    if (DOM.shotLogWrap) {
-      // Smooth scroll für besseres UX
-      DOM.shotLogWrap.scrollTo({
-        top: DOM.shotLogWrap.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-    setTimeout(() => { _shotLogScrollPending = false; }, 100);
+    // Zweiter rAF: scrollHeight ist jetzt aktuell
+    requestAnimationFrame(() => {
+      if (DOM.shotLogWrap) {
+        DOM.shotLogWrap.scrollTo({
+          top: DOM.shotLogWrap.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+      // Debounce verkürzt auf 50ms (ausreichend für Burst-Modus)
+      setTimeout(() => { _shotLogScrollPending = false; }, 50);
+    });
   });
 }
 
@@ -666,13 +671,16 @@ function toggleProfileMenu() {
   if (isActive) {
     ov.classList.remove('active');
     if (icon) icon.classList.remove('active');
+    // BUG-FIX #2: Overflow SOFORT wiederherstellen (vor rAF, verhindert iOS Scroll-Lock)
     document.body.style.overflow = '';
-    // iOS Safari fallback: scroll position wiederherstellen
     if (window.innerWidth <= 768 && document.body.style.position === 'fixed') {
       const scrollY = Math.abs(parseInt(document.body.style.top, 10) || 0);
       document.body.style.position = '';
       document.body.style.top = '';
-      window.scrollTo(0, scrollY);
+      // requestAnimationFrame um sicherzustellen dass position entfernt wurde
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY);
+      });
     }
   } else {
     refreshDebugToolsVisibility();
@@ -708,8 +716,20 @@ function switchProfileTab(tab) {
   panels.forEach(p => p.classList.toggle('active', p.id === 'psPanel-' + tab));
 
   if (tab === 'sun') renderSunGrid();
-  if (tab === 'lb') loadLeaderboard();
+  if (tab === 'lb') {
+    // NEU: Modernes Leaderboard laden falls verfügbar
+    if (typeof LeaderboardModern !== 'undefined') {
+      LeaderboardModern.load();
+    } else {
+      loadLeaderboard();
+    }
+  }
   if (tab === 'history') renderHistory();
+  if (tab === 'friends') {
+    if (typeof FriendsUI !== 'undefined') {
+      FriendsUI.renderProfileTab();
+    }
+  }
   if (tab === 'debug') refreshDebugPanel();
   if (tab === 'stats') {
     requestAnimationFrame(() => renderPerformanceChart());
@@ -958,7 +978,7 @@ window.signInWithGoogle = async function() {
       // Anonymen Account mit Google verknüpfen
       try {
         await currentUser.linkWithCredential(credential);
-        console.log('✅ Anonymen Account mit Google verknüpft');
+        console.debug('✅ Anonymen Account mit Google verknüpft');
       } catch (linkError) {
         // Wenn Verknüpfung fehlschlägt (z.B. Google existiert bereits)
         if (linkError.code === 'auth/credential-already-in-use') {
@@ -1079,7 +1099,7 @@ window.registerWithEmail = async function(email, password) {
     // Bestehende lokale Daten mit neuem Konto verknüpfen
     await linkLocalDataToFirebase(user);
 
-    console.log('✅ Neues Konto erstellt:', user.email);
+    console.debug('✅ Neues Konto erstellt:', user.email);
     return user;
   } catch (error) {
     console.error('Registration Error:', error);
@@ -1128,7 +1148,7 @@ window.signInWithEmail = async function(email, password) {
     // Bestehende lokale Daten mit Konto verknüpfen
     await linkLocalDataToFirebase(user);
 
-    console.log('✅ Angemeldet:', user.email);
+    console.debug('✅ Angemeldet:', user.email);
     return user;
   } catch (error) {
     console.error('Login Error:', error);
@@ -1192,7 +1212,7 @@ window.logoutEmail = async function() {
     updateXPCorner();
     updateProfileMenu();
 
-    console.log('✅ Abgemeldet');
+    console.debug('✅ Abgemeldet');
     return true;
   } catch (error) {
     console.error('Logout Error:', error);
@@ -1225,7 +1245,7 @@ async function linkLocalDataToFirebase(user) {
       StorageManager.setRaw('profilePhotoURL', user.photoURL);
     }
 
-    console.log('✅ Lokale Daten mit Firebase-Konto verknüpft:', user.email || user.displayName);
+    console.debug('✅ Lokale Daten mit Firebase-Konto verknüpft:', user.email || user.displayName);
   } catch (error) {
     console.warn('Data linking warning:', error?.code || error?.message || error);
     // Nicht kritisch - Login funktioniert trotzdem
@@ -1838,7 +1858,7 @@ function fbSubmit() {
   while (entries.length > 100) entries.pop();
   try { localStorage.setItem('sd_feedback_entries', JSON.stringify(entries)); } catch (e) { console.warn('[Feedback] localStorage Fehler:', e.message); }
 
-  console.log('[Feedback]', { rating: fbRating + 1, tags: fbTags, comment, duel: fbDuelData });
+  console.debug('[Feedback]', { rating: fbRating + 1, tags: fbTags, comment, duel: fbDuelData });
 
   // Thank you animation
   const card = document.getElementById('screenFeedback');
@@ -2390,7 +2410,7 @@ function recordGameResult(result, diff, weapon, playerPts, botPts) {
     if (typeof StreakTracker !== 'undefined') {
       const streakResult = StreakTracker.recordGame();
       if (streakResult.streakIncreased && streakResult.milestone) {
-        console.log('[Streak] Milestone erreicht:', streakResult.milestone);
+        console.debug('[Streak] Milestone erreicht:', streakResult.milestone);
       }
     }
 
@@ -2823,15 +2843,15 @@ function refreshPremiumDashboard() {
     latest3.forEach(game => {
       const isWin = game.result === 'win' || game.result === 'Sieg';
       const color = isWin ? '#7ab030' : '#f06050';
-      const label = isWin ? '✓ Sieg' : '✗ Niederlage';
-      const diff = game.difficulty || 'Mittel';
-      
+      const label = escHtml(isWin ? '✓ Sieg' : '✗ Niederlage');
+      const diff = escHtml(game.difficulty || 'Mittel');
+
       // Disziplin-Name korrekt auflösen: "LG 40", "LG 60", "KK 50m", "KK 100m", "KK 3×20"
       let displayDisc = '';
       if (game.discipline && DISC[game.discipline]) {
         displayDisc = DISC[game.discipline].name;
       } else if (game.disciplineName) {
-        displayDisc = game.disciplineName;
+        displayDisc = escHtml(game.disciplineName);
       } else {
         // Fallback: Versuche aus weapon + shotsCount zu rekonstruieren
         const weapon = (game.weapon || 'lg').toLowerCase();
@@ -2957,14 +2977,14 @@ function refreshPremiumDashboard() {
     let listHtml = '';
     const recentGames = historyV2.slice(Math.max(historyV2.length - 2, 0)).reverse();
     recentGames.forEach(game => {
-      const diff = game.difficulty || 'Mittel';
-      
+      const diff = escHtml(game.difficulty || 'Mittel');
+
       // Disziplin-Name korrekt auflösen (gleiche Logik wie oben)
       let displayDisc = '';
       if (game.discipline && DISC[game.discipline]) {
         displayDisc = DISC[game.discipline].name;
       } else if (game.disciplineName) {
-        displayDisc = game.disciplineName;
+        displayDisc = escHtml(game.disciplineName);
       } else {
         const weapon = (game.weapon || 'lg').toLowerCase();
         const shotsCount = game.shotsCount || 40;
@@ -3007,19 +3027,19 @@ function renderHistory() {
       const pPts = h.playerPts !== null ? parseFloat(h.playerPts).toFixed(1) : '–';
       const bPts = h.botPts !== null ? parseFloat(h.botPts).toFixed(1) : '–';
       const weaponUpper = (h.weapon || (h.weaponName === 'Luftgewehr' ? 'lg' : h.weaponName === 'Kleinkaliber' ? 'kk' : h.weaponName) || 'LG').toUpperCase();
-      let discUpper = (h.disciplineName || h.discipline || '').toString().toUpperCase();
+      let discUpper = escHtml((h.disciplineName || h.discipline || '').toString().toUpperCase());
       if (discUpper.startsWith(weaponUpper)) {
         discUpper = discUpper.substring(weaponUpper.length).trim();
       }
-      const finalTitle = `${weaponUpper} ${discUpper} · ${h.diffName || h.diff || 'Mittel'}`;
+      const finalTitle = `${weaponUpper} ${discUpper} · ${escHtml(h.diffName || h.diff || 'Mittel')}`;
 
       return `<div class="ps-history-item">
-            <div class="phi-result ${h.result}">${resLabel}</div>
+            <div class="phi-result ${escHtml(h.result)}">${resLabel}</div>
             <div class="phi-info">
               <div class="phi-title">${finalTitle}</div>
-              <div class="phi-sub">${h.date}</div>
+              <div class="phi-sub">${escHtml(h.date)}</div>
             </div>
-            <div class="phi-score ${h.result}">${pPts} <span style="opacity:.4;font-size:.7em">vs</span> ${bPts}</div>
+            <div class="phi-score ${escHtml(h.result)}">${pPts} <span style="opacity:.4;font-size:.7em">vs</span> ${bPts}</div>
           </div>`;
     }).join('');
   } catch (e) {
@@ -4069,7 +4089,7 @@ async function showAccountSyncCode() {
           <button onclick="document.getElementById('syncCodeOverlay')?.remove()" style="flex:1;padding:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;">
             Schließen
           </button>
-          <button onclick="navigator.clipboard?.writeText('${data.code}');this.textContent='✅ Kopiert!';setTimeout(()=>this.textContent='Kopieren',1500)" style="flex:1;padding:12px;background:linear-gradient(135deg,#00c3ff,#7ab030);border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;">
+          <button onclick="navigator.clipboard?.writeText('${escHtml(data.code)}');this.textContent='✅ Kopiert!';setTimeout(()=>this.textContent='Kopieren',1500)" style="flex:1;padding:12px;background:linear-gradient(135deg,#00c3ff,#7ab030);border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;">
             📋 Kopieren
           </button>
         </div>
@@ -4379,20 +4399,31 @@ function queueLeaderboardEntry(reason = 'leaderboard_sync') {
 }
 
 // Cloud-Sync Debounce (verhindert Firebase-Überflutung bei schnellen Aktionen)
+// BUG-FIX #6: Unterschiedliche Debounce-Zeiten für kritische vs. normale Events
 let _cloudSyncDebounceTimers = {};
 const CLOUD_SYNC_DEBOUNCE_MS = 2000;
+const CLOUD_SYNC_DEBOUNCE_CRITICAL = 500; // Für XP/Ergebnisse
 
 function scheduleCloudSync(reason = 'local_change', options = {}) {
   // Debounce für häufige Calls
   if (_cloudSyncDebounceTimers[reason]) {
     clearTimeout(_cloudSyncDebounceTimers[reason]);
   }
-  
+
+  // BUG-FIX #6: Kritische Events schneller syncen
+  const isCritical = options.critical || 
+    reason.includes('xp') || 
+    reason.includes('battle') || 
+    reason.includes('streak');
+  const delay = options.immediate ? 0 
+    : isCritical ? CLOUD_SYNC_DEBOUNCE_CRITICAL 
+    : CLOUD_SYNC_DEBOUNCE_MS;
+
   return new Promise((resolve) => {
     _cloudSyncDebounceTimers[reason] = setTimeout(() => {
       delete _cloudSyncDebounceTimers[reason];
       doScheduleCloudSync(reason, options).then(resolve);
-    }, options.immediate ? 0 : CLOUD_SYNC_DEBOUNCE_MS);
+    }, delay);
   });
 }
 
@@ -4951,10 +4982,10 @@ function renderLeaderboard(entries, scope = getActiveLeaderboardScope()) {
     return `
           <div class="lb-row ${isMe ? 'me' : ''}">
             <div class="lb-rank-num">${i + 1}</div>
-            <div class="lb-avatar">${e.rankIcon || '👤'}</div>
+            <div class="lb-avatar">${escHtml(e.rankIcon || '👤')}</div>
             <div class="lb-info">
               <div class="lb-name">${escHtml(displayName)}${isMe ? ' (Du)' : ''}</div>
-              <div class="lb-sub">${weaponIcon} ${e.rank || 'Schütze'}</div>
+              <div class="lb-sub">${weaponIcon} ${escHtml(e.rank || 'Schütze')}</div>
             </div>
             <div class="lb-stats">
               <div class="lb-xp">${score} Score</div>
@@ -5079,10 +5110,10 @@ renderLeaderboard = function renderLeaderboardPatched(entries, scope = getActive
     return `
           <div class="lb-row ${isMe ? 'me' : ''}">
             <div class="lb-rank-num">${index + 1}</div>
-            <div class="lb-avatar">${entry.rankIcon || '👤'}</div>
+            <div class="lb-avatar">${escHtml(entry.rankIcon || '👤')}</div>
             <div class="lb-info">
               <div class="lb-name">${escHtml(displayName)}${isMe ? ' (Du)' : ''}</div>
-              <div class="lb-sub">${subline}</div>
+              <div class="lb-sub">${escHtml(subline)}</div>
             </div>
             <div class="lb-stats">
               <div class="lb-xp">${topLine}</div>
@@ -5242,8 +5273,38 @@ function initDOMCache() {
 }
 
 /* ─── CANVAS ─────────────────────────────── */
-const canvas = document.getElementById('targetCanvas');
-const ctx = canvas.getContext('2d', { alpha: false });
+// Lazy getter für canvas und ctx - vermeidet null-Referenz wenn DOM noch nicht ready
+let _canvas = null;
+let _ctx = null;
+function getCanvas() {
+  if (!_canvas) {
+    _canvas = document.getElementById('targetCanvas');
+    if (!_canvas) {
+      console.error('[app.js] #targetCanvas nicht im DOM gefunden!');
+      return null;
+    }
+  }
+  return _canvas;
+}
+function getCtx() {
+  if (!_ctx && getCanvas()) {
+    _ctx = _canvas.getContext('2d', { alpha: false });
+  }
+  return _ctx;
+}
+// Compatibility: Erstelle canvas/ctx als Proxies für bestehenden Code
+const canvas = new Proxy({}, {
+  get: (target, prop) => {
+    const c = getCanvas();
+    return c ? c[prop] : undefined;
+  }
+});
+const ctx = new Proxy({}, {
+  get: (target, prop) => {
+    const c = getCtx();
+    return c ? c[prop] : undefined;
+  }
+});
 
 // Offscreen canvas: static target (rings, numbers, crosshairs) — drawn once per resize
 const _offCanvas = document.createElement('canvas');
@@ -6079,8 +6140,15 @@ function startBattle() {
   G._lastPlayerShotAt = G._gameStartTime;
   HealthyEngagement.onBattleStart();
   G.dnf = false;
+  
+  // NEU: Friend-Challenge Modus erkennen
+  const isFriendChallenge = !!G.friendChallenge;
+  if (isFriendChallenge) {
+    console.debug('[Battle] Friend-Challenge Modus aktiv gegen:', G.friendChallenge.friendUsername);
+  }
+  
   G.probeActive = true;  // Probezeit ist aktiv
-  G.probeSecsLeft = (G.discipline === 'kk3x20' ? KK3X20_CFG.probeSecs : 15 * 60);  // disziplinspezifische Probezeit
+  G.probeSecsLeft = (isFriendChallenge || G.discipline === 'kk3x20' ? KK3X20_CFG.probeSecs : 15 * 60);  // disziplinspezifische Probezeit
   G.transitionSecsLeft = 0;
   G.transitionLabel = '';
 
@@ -6099,6 +6167,12 @@ function startBattle() {
 
   setSz(); drawTarget([]);
 
+  // BUG-FIX #3: Null-Check für shotLogWrap verhindert Absturz wenn DOM nicht bereit
+  if (!DOM.shotLogWrap) {
+    console.error('[startBattle] shotLogWrap nicht gefunden — DOM nicht bereit?');
+    return;
+  }
+
   // Reset shot log area
   DOM.shotLogWrap.innerHTML = '';
   if (G.is3x20) {
@@ -6110,7 +6184,14 @@ function startBattle() {
       DOM.shotLogWrap.appendChild(grp);
       DOM.slPills[i] = null;
     });
-    G.positions.forEach((_, i) => { DOM.slPills[i] = document.getElementById(`slPills${i}`); });
+    // BUG-FIX #7: Null-Check für slPills Elemente mit Fehler-Logging
+    G.positions.forEach((_, i) => {
+      const el = document.getElementById(`slPills${i}`);
+      if (!el) {
+        console.error(`[startBattle] slPills${i} nicht gefunden — DOM-Update fehlgeschlagen`);
+      }
+      DOM.slPills[i] = el;
+    });
   } else {
     const flat = document.createElement('div');
     flat.className = 'shot-log';
@@ -6162,13 +6243,18 @@ function startBattle() {
   startMatchTimer(timeMins * 60);
 
   // Bot-Auto-Shoot startet NACH Probezeit (15 Min später)
-  const probeDelayMs = ((G.discipline === 'kk3x20' ? KK3X20_CFG.probeSecs : 15 * 60) + 5) * 1000; // Probezeit + 5 Sek Delay
-  G._botStartTimeout = setTimeout(() => {
-    if (!G.botStarted) {
-      G.botStarted = true;
-      startBotAutoShoot();
-    }
-  }, probeDelayMs);
+  // NEU: Bei Friend-Challenge im async Modus oder wenn Challenger zuerst schießt, Bot nicht starten
+  if (!isFriendChallenge || (isFriendChallenge && !G.friendChallenge.isChallenger)) {
+    const probeDelayMs = ((G.discipline === 'kk3x20' ? KK3X20_CFG.probeSecs : 15 * 60) + 5) * 1000; // Probezeit + 5 Sek Delay
+    G._botStartTimeout = setTimeout(() => {
+      if (!G.botStarted) {
+        G.botStarted = true;
+        startBotAutoShoot();
+      }
+    }, probeDelayMs);
+  } else if (isFriendChallenge) {
+    console.debug('[Battle] Async-Modus: Bot wird nicht gestartet (Challenger schießt zuerst)');
+  }
 }
 
 function updateBattleUI() {
@@ -7335,13 +7421,31 @@ function showGameOver(pp, bp, reason, ppInt, detectedShots = null) {
     if (typeof StreakTracker !== 'undefined') {
       const streakResult = StreakTracker.recordGame();
       if (streakResult.streakIncreased && streakResult.milestone) {
-        console.log('[Streak] Milestone erreicht:', streakResult.milestone);
+        console.debug('[Streak] Milestone erreicht:', streakResult.milestone);
       }
     }
   }
 
   // Update UI in case user views result details
   updateSchuetzenpass();
+
+  // NEU: Friend-Challenge Ergebnis übermitteln
+  if (G.friendChallenge && typeof FriendChallenges !== 'undefined') {
+    try {
+      const finalScore = G.playerTotal;
+      const shots = G.playerShots.map(s => s.pts || s.points || 0);
+      
+      FriendChallenges.submitChallengeResult(
+        G.friendChallenge.challengeId,
+        finalScore,
+        shots
+      );
+      
+      console.debug('[Battle] Friend-Challenge Ergebnis übermittelt:', finalScore);
+    } catch (error) {
+      console.error('[Battle] Friend-Challenge Ergebnis-Fehler:', error);
+    }
+  }
 
   if (DOM.analysisResult) DOM.analysisResult.innerHTML = '';
   const totalDuels = getTotalDuels();
@@ -7462,8 +7566,10 @@ function openShareCard() {
 }
 
 function closeShareCard(e) {
-  if (e && e.target !== document.getElementById('shareOverlay')) return;
-  document.getElementById('shareOverlay').classList.remove('active');
+  const overlay = document.getElementById('shareOverlay');
+  // BUG-FIX #1: Overflow IMMER wiederherstellen, auch bei X-Button oder Kind-Element Klicks
+  if (e && e.target !== overlay && !overlay?.contains(e.target)) return;
+  overlay.classList.remove('active');
   document.body.style.overflow = '';
 }
 
@@ -7579,6 +7685,8 @@ function restartGame() {
   G.is3x20 = false;
   G.posIdx = 0; G.posShots = 0; G.posResults = [];
   G.positions = []; G.posIcons = [];
+  // NEU: Friend-Challenge zurücksetzen
+  G.friendChallenge = null;
   if (DOM.profileOverlay) DOM.profileOverlay.classList.remove('active');
   if (DOM.profileIcon) DOM.profileIcon.classList.remove('active');
 
@@ -7622,14 +7730,14 @@ checkSunAchievements(); // Check on load in case new achievements unlocked
 // NEU: Fallback-System zuerst initialisieren
 if (typeof FeatureFallback !== 'undefined') {
   FeatureFallback.init();
-  console.log('🛡️ Feature Fallback System geladen');
+  console.debug('🛡️ Feature Fallback System geladen');
 }
 
 // NEU: Neue Features initialisieren (mit Fallback-Schutz)
 if (typeof AdaptiveBotSystem !== 'undefined') {
   try {
     AdaptiveBotSystem.init();
-    console.log('🤖 Adaptive Bot System geladen');
+    console.debug('🤖 Adaptive Bot System geladen');
   } catch (error) {
     console.error('❌ Adaptive Bot System Fehler:', error);
     if (typeof FeatureFallback !== 'undefined') {
@@ -7641,7 +7749,7 @@ if (typeof AdaptiveBotSystem !== 'undefined') {
 if (typeof ContextualOCR !== 'undefined') {
   try {
     ContextualOCR.init();
-    console.log('🔍 Contextual OCR System geladen');
+    console.debug('🔍 Contextual OCR System geladen');
   } catch (error) {
     console.error('❌ Contextual OCR Fehler:', error);
     if (typeof FeatureFallback !== 'undefined') {
@@ -7653,7 +7761,7 @@ if (typeof ContextualOCR !== 'undefined') {
 if (typeof MultiScoreDetection !== 'undefined') {
   try {
     MultiScoreDetection.init();
-    console.log('📊 Multi-Score Detection System geladen');
+    console.debug('📊 Multi-Score Detection System geladen');
   } catch (error) {
     console.error('❌ Multi-Score Detection Fehler:', error);
     if (typeof FeatureFallback !== 'undefined') {
@@ -7682,7 +7790,7 @@ function checkFirstVisit() {
 
 window.addEventListener('difficultyAdapted', function (event) {
   const detail = event.detail || {};
-  console.log('🎯 Schwierigkeit angepasst:', detail.discipline || 'global', detail.oldDifficulty, '→', detail.newDifficulty);
+  console.debug('🎯 Schwierigkeit angepasst:', detail.discipline || 'global', detail.oldDifficulty, '→', detail.newDifficulty);
   if (detail.discipline && detail.discipline !== G.discipline) return;
   setDifficulty(detail.newDifficulty, { persist: false });
 });
@@ -7818,15 +7926,30 @@ window.addEventListener('resize', () => {
   });
 }, { passive: true });
 
+// BUG-FIX #5: orientationchange Handler für iOS Safari Rotation
+window.addEventListener('orientationchange', () => {
+  // Kurze Verzögerung für iOS Safari damit Viewport-Werte aktualisiert werden
+  setTimeout(() => {
+    setSz();
+    drawTarget(G.targetShots);
+  }, 200);
+});
+
 // Swipe-down to close profile sheet
 (function () {
   let startY = 0;
+  let startX = 0;
   const sheet = document.getElementById('profileSheet');
   if (!sheet) return;
-  sheet.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+  sheet.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+  }, { passive: true });
   sheet.addEventListener('touchend', e => {
     const dy = e.changedTouches[0].clientY - startY;
-    if (dy > 80) toggleProfileMenu();
+    const dx = Math.abs(e.changedTouches[0].clientX - startX);
+    // Nur schließen wenn vertikal UND nicht horizontal abgelenkt
+    if (dy > 80 && dy > dx * 2) toggleProfileMenu();
   }, { passive: true });
 })();
 
